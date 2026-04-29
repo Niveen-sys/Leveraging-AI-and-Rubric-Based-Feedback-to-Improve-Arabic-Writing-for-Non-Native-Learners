@@ -1,5 +1,5 @@
 streamlit
-google-generativeai
+openai          ← changed
 Pillow
 pytesseract
 pillow-heif
