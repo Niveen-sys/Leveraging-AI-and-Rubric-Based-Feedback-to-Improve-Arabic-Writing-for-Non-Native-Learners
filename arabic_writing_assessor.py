@@ -1,6 +1,8 @@
 import streamlit as st
-import google.generativeai as genai
+import openai
 import os
+import base64
+import io
 from PIL import Image
 import pytesseract
 
@@ -481,10 +483,10 @@ STRICT RULES — NEVER BREAK THESE:
 
 
 def get_api_key() -> str:
-    """Retrieve Gemini API key from secrets or environment."""
-    api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    """Retrieve OpenAI API key from secrets or environment."""
+    api_key = st.secrets.get("OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY not found in secrets or environment.")
+        raise ValueError("OPENAI_API_KEY not found in secrets or environment.")
     return api_key
 
 
@@ -514,34 +516,56 @@ def convert_to_pil_image(uploaded_file) -> list:
 
 
 def extract_arabic_from_image_gemini(uploaded_file) -> str:
-    """Use Gemini Vision to extract Arabic handwriting from any uploaded file."""
+    """Use OpenAI Vision to extract Arabic handwriting from any uploaded file."""
     api_key = get_api_key()
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    client = openai.OpenAI(api_key=api_key)
 
     images = convert_to_pil_image(uploaded_file)
 
     all_text = []
     for img in images:
-        response = model.generate_content([
-            img,
-            """This image contains handwritten Arabic text written by a student.
+        # Convert PIL image to base64
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG")
+        b64_image = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}
+                        },
+                        {
+                            "type": "text",
+                            "text": """This image contains handwritten Arabic text written by a student.
 Please transcribe ALL the Arabic text exactly as written — including any spelling mistakes.
 Do NOT correct errors. Do NOT add punctuation that is not there.
 Return ONLY the Arabic text, nothing else."""
-        ])
-        all_text.append(response.text.strip())
+                        }
+                    ]
+                }
+            ],
+            max_tokens=1000
+        )
+        all_text.append(response.choices[0].message.content.strip())
 
     return "\n".join(all_text)
 
 
 def assess_with_gemini(prompt: str) -> str:
-    """Call Gemini API and return the assessment text."""
+    """Call OpenAI API and return the assessment text."""
     api_key = get_api_key()
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(prompt)
-    return response.text
+    client = openai.OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=2000
+    )
+    return response.choices[0].message.content
 
 
 # =============================================
@@ -963,7 +987,7 @@ with col_right:
             writing = writing_typed
 
     with writing_tab2:
-        st.info("📸 Upload a photo of the student's handwritten Arabic. Gemini will read it automatically.")
+        st.info("📸 Upload a photo of the student's handwritten Arabic. GPT-4o will read it automatically.")
         st.caption("📱 Supports: JPG, PNG, HEIC (iPhone), PDF, WEBP, BMP — single or multiple photos")
         writing_imgs = st.file_uploader(
             "Upload handwriting photo(s) or PDF",
@@ -1017,7 +1041,7 @@ with col_right:
 # =============================================
 if assess_btn:
     st.divider()
-    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with Gemini..."):
+    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with OpenAI..."):
         try:
             prompt = build_prompt(
                 name=name.strip(),
