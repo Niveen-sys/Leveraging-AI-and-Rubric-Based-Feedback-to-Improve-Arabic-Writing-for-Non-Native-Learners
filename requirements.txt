@@ -1,7 +1,7 @@
 streamlit
-openai          
-Pillow
+anthropic
+openai
+google-generativeai
 pytesseract
+pymupdf
 pillow-heif
-PyMuPDF
-pandas
