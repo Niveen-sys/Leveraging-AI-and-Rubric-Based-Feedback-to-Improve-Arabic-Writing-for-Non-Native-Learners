@@ -4,6 +4,21 @@ import os
 from PIL import Image
 import pytesseract
 
+# HEIC support
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    HEIC_SUPPORTED = True
+except ImportError:
+    HEIC_SUPPORTED = False
+
+# PDF support
+try:
+    import fitz  # PyMuPDF
+    PDF_SUPPORTED = True
+except ImportError:
+    PDF_SUPPORTED = False
+
 # =============================================
 # RUBRICS — Pre-loaded from PPTX
 # =============================================
@@ -473,20 +488,51 @@ def get_api_key() -> str:
     return api_key
 
 
+def convert_to_pil_image(uploaded_file) -> list:
+    """Convert any uploaded file (HEIC, PDF, JPG, PNG) to a list of PIL Images."""
+    filename = uploaded_file.name.lower()
+    images = []
+
+    if filename.endswith(".pdf"):
+        if PDF_SUPPORTED:
+            data = uploaded_file.read()
+            doc = fitz.open(stream=data, filetype="pdf")
+            for page in doc:
+                pix = page.get_pixmap(dpi=200)
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                images.append(img)
+        else:
+            raise ValueError("PDF support not available. Please install PyMuPDF.")
+    else:
+        # Handles JPG, PNG, HEIC, WEBP, BMP etc.
+        img = Image.open(uploaded_file)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        images.append(img)
+
+    return images
+
+
 def extract_arabic_from_image_gemini(uploaded_file) -> str:
-    """Use Gemini Vision to extract Arabic handwriting from an uploaded image."""
+    """Use Gemini Vision to extract Arabic handwriting from any uploaded file."""
     api_key = get_api_key()
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-1.5-flash")
-    img = Image.open(uploaded_file)
-    response = model.generate_content([
-        img,
-        """This image contains handwritten Arabic text written by a student.
+
+    images = convert_to_pil_image(uploaded_file)
+
+    all_text = []
+    for img in images:
+        response = model.generate_content([
+            img,
+            """This image contains handwritten Arabic text written by a student.
 Please transcribe ALL the Arabic text exactly as written — including any spelling mistakes.
 Do NOT correct errors. Do NOT add punctuation that is not there.
 Return ONLY the Arabic text, nothing else."""
-    ])
-    return response.text.strip()
+        ])
+        all_text.append(response.text.strip())
+
+    return "\n".join(all_text)
 
 
 def assess_with_gemini(prompt: str) -> str:
@@ -852,7 +898,7 @@ with col_left:
 
     st.markdown('<div class="section-title">🎯 Learning Objective (LO)</div>', unsafe_allow_html=True)
     lo_text = st.text_area("Type the LO here", height=100, placeholder="e.g. Student can write a descriptive paragraph about their daily routine using past tense.")
-    lo_img = st.file_uploader("Or upload LO as image", type=["png", "jpg", "jpeg"], key="lo_img")
+    lo_img = st.file_uploader("Or upload LO as image", type=["png", "jpg", "jpeg", "heic", "heif", "webp", "pdf"], key="lo_img")
     if lo_img:
         lo_extracted = extract_text_from_image(lo_img)
         if lo_extracted:
@@ -861,7 +907,7 @@ with col_left:
 
     st.markdown('<div class="section-title">✅ Success Criteria</div>', unsafe_allow_html=True)
     sc_text = st.text_area("Type Success Criteria here", height=100, placeholder="e.g. Uses at least 3 connectives, writes 6-8 lines, uses past and present tense.")
-    sc_img = st.file_uploader("Or upload Success Criteria as image", type=["png", "jpg", "jpeg"], key="sc_img")
+    sc_img = st.file_uploader("Or upload Success Criteria as image", type=["png", "jpg", "jpeg", "heic", "heif", "webp", "pdf"], key="sc_img")
     if sc_img:
         sc_extracted = extract_text_from_image(sc_img)
         if sc_extracted:
@@ -918,9 +964,10 @@ with col_right:
 
     with writing_tab2:
         st.info("📸 Upload a photo of the student's handwritten Arabic. Gemini will read it automatically.")
+        st.caption("📱 Supports: JPG, PNG, HEIC (iPhone), PDF, WEBP, BMP")
         writing_img = st.file_uploader(
-            "Upload handwriting photo",
-            type=["png", "jpg", "jpeg"],
+            "Upload handwriting photo or PDF",
+            type=["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp", "pdf"],
             key="writing_img"
         )
         if writing_img:
