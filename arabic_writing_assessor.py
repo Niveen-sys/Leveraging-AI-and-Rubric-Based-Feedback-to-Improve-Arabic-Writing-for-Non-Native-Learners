@@ -517,7 +517,7 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
     """Use Gemini Vision to extract Arabic handwriting from any uploaded file."""
     api_key = get_api_key()
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash")
 
     images = convert_to_pil_image(uploaded_file)
 
@@ -539,7 +539,7 @@ def assess_with_gemini(prompt: str) -> str:
     """Call Gemini API and return the assessment text."""
     api_key = get_api_key()
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash")
     response = model.generate_content(prompt)
     return response.text
 
