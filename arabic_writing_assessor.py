@@ -1,5 +1,6 @@
 import streamlit as st
-import anthropic
+import google.generativeai as genai
+import os
 from PIL import Image
 import pytesseract
 
@@ -453,15 +454,15 @@ STRICT RULES — NEVER BREAK THESE:
 """
 
 
-def assess_with_claude(prompt: str) -> str:
-    """Call Claude API and return the assessment text."""
-    client = anthropic.Anthropic()
-    message = client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return message.content[0].text
+def assess_with_gemini(prompt: str) -> str:
+    """Call Gemini API and return the assessment text."""
+    api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY not found in secrets or environment.")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    response = model.generate_content(prompt)
+    return response.text
 
 
 # =============================================
@@ -504,7 +505,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="main-title">📝 Arabic Writing Assessor</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">AI-powered feedback for non-native Arabic learners — powered by Claude</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI-powered feedback for non-native Arabic learners — powered by Gemini</div>', unsafe_allow_html=True)
 
 st.divider()
 
@@ -583,7 +584,7 @@ with col_right:
 # =============================================
 if assess_btn:
     st.divider()
-    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with Claude..."):
+    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with Gemini..."):
         try:
             prompt = build_prompt(
                 name=name.strip(),
@@ -594,7 +595,7 @@ if assess_btn:
                 rubric_key=rubric_key,
                 rubric=rubric_text
             )
-            result = assess_with_claude(prompt)
+            result = assess_with_gemini(prompt)
 
             st.subheader("📊 Assessment Feedback")
             st.markdown(result)
@@ -607,9 +608,7 @@ if assess_btn:
                 mime="text/plain"
             )
 
-        except anthropic.APIConnectionError:
-            st.error("❌ Could not connect to Claude API. Please check your internet connection.")
-        except anthropic.AuthenticationError:
-            st.error("❌ Invalid API key. Please set your ANTHROPIC_API_KEY environment variable.")
+        except ValueError as e:
+            st.error(f"❌ API Key error: {str(e)}")
         except Exception as e:
             st.error(f"❌ An error occurred: {str(e)}")
