@@ -5,7 +5,7 @@ import io
 import base64
 from PIL import Image
 
-# HEIC support
+# HEIC support for iPhones
 try:
     from pillow_heif import register_heif_opener
     register_heif_opener()
@@ -37,30 +37,30 @@ PURPOSE/CONTENT:
 ORGANIZATION/COHERENCY:
 - Beginning (1): Writer can write simple words with correct conjugation of letters about personal information clearly.
 - Developing (1.5): Can write simple short sentence with correct conjugation of letters about personal information and basic topics.
-- Accomplished (2): Can write simple short sentences (2-3 lines) with personal pronoun (I) about personal and basic topics.
-- Advanced (2.5): Can write simple short sentences (3-4 lines) with personal pronouns (I and He/She).
+- Accomplished (2): Can write simple short sentences (2–3 lines) with personal pronoun (I) about personal and basic topics.
+- Advanced (2.5): Can write simple short sentences (3–4 lines) with personal pronouns (I and He/She).
 - Exemplary (3): Can write simple short sentences (more than 4 lines) with personal pronouns (I, He, She).
 
 VOCABULARY:
-- Beginning (1): Very few basic vocabulary words (4-5) from topic learned.
-- Developing (1.5): Basic vocabulary words (5-6) including 1 adjective or connective.
+- Beginning (1): Very few basic vocabulary words (4–5) from topic learned.
+- Developing (1.5): Basic vocabulary words (5–6) including 1 adjective or connective.
 - Accomplished (2): Some vocabulary words including at least 2 adjectives or 2 connectives.
-- Advanced (2.5): Variety of vocabulary including 2-3 adjectives, connectives, or time phrases.
+- Advanced (2.5): Variety of vocabulary including 2–3 adjectives, connectives, or time phrases.
 - Exemplary (3): Many vocabulary words including more than 3 adjectives, connectives, or adverbs.
 
 SENTENCE STRUCTURE:
 - Beginning (1): Few simple short sentences with some ambiguity.
 - Developing (1.5): Simple short sentences, clearly written, minimal ambiguity, very few errors.
 - Accomplished (2): Medium sentences, clearly written, very few errors, some complex words.
-- Advanced (2.5): Short paragraph (3-4 lines) about familiar topics with variety of structures (likes/dislikes), some complex words.
+- Advanced (2.5): Short paragraph (3–4 lines) about familiar topics with variety of structures (likes/dislikes), some complex words.
 - Exemplary (3): Short paragraph about basic topics with variety of structures (likes/dislikes, opinions, negation, connectives).
 
 GRAMMAR/SPELLING:
 - Beginning (1): Present tense only, with spelling errors.
 - Developing (1.5): Present tense with personal pronouns (I/He/She), a connective and preposition. Some spelling errors.
-- Accomplished (2): Present tense with personal pronouns (I/He/She/We), connectives (1-2), prepositions (1-2). Some spelling errors.
-- Advanced (2.5): Present and past tenses with personal pronouns (I/He/She/We), connectives (2-3), prepositions (2-3). Some spelling errors.
-- Exemplary (3): Present and past tenses with personal pronouns (I/He/She/We), connectives (2-3), prepositions (2-3). No spelling errors.
+- Accomplished (2): Present tense with personal pronouns (I/He/She/We), connectives (1–2), prepositions (1–2). Some spelling errors.
+- Advanced (2.5): Present and past tenses with personal pronouns (I/He/She/We), connectives (2–3), prepositions (2–3). Some spelling errors.
+- Exemplary (3): Present and past tenses with personal pronouns (I/He/She/We), connectives (2–3), prepositions (2–3). No spelling errors.
 """,
 
     "3-4": """
@@ -75,10 +75,10 @@ PURPOSE/CONTENT:
 
 ORGANIZATION/COHERENCY:
 - Beginning (1): Short sentences in present tense with pronoun (I). Short phrases about personal information and basic topics.
-- Developing (1.5): Short sentences in present tense with pronoun (I), 2-3 sentences, little details and organization.
-- Accomplished (2): Medium sentences with personal pronouns (I/He/She), 3-4 lines, some complexity.
-- Advanced (2.5): Medium sentences with personal pronouns (I/He/She), 4-5 lines, some complex words.
-- Exemplary (3): Medium sentences with personal pronouns (I/He/She), 4-5 lines, complex words, coherent and organized.
+- Developing (1.5): Short sentences in present tense with pronoun (I), 2–3 sentences, little details and organization.
+- Accomplished (2): Medium sentences with personal pronouns (I/He/She), 3–4 lines, some complexity.
+- Advanced (2.5): Medium sentences with personal pronouns (I/He/She), 4–5 lines, some complex words.
+- Exemplary (3): Medium sentences with personal pronouns (I/He/She), 4–5 lines, complex words, coherent and organized.
 
 VOCABULARY:
 - Beginning (1): Few basic vocabulary words from the topic.
@@ -113,25 +113,25 @@ PURPOSE/CONTENT:
 - Exemplary (3): Most of the information expressed clearly.
 
 ORGANIZATION/COHERENCY:
-- Beginning (1): Descriptive sentences in present tense, 1-2 lines, minimal details.
-- Developing (1.5): Present and future tense sentences, 2-3 sentences, little details and organization.
-- Accomplished (2): Present/past/future tenses, 3-4 lines, some details and organization, somewhat coherent.
-- Advanced (2.5): Narrative and descriptive paragraph, 4-5 lines, mostly coherent and organized.
-- Exemplary (3): Narrative and descriptive paragraph, 5-6 lines, coherent and organized well.
+- Beginning (1): Descriptive sentences in present tense, 1–2 lines, minimal details.
+- Developing (1.5): Present and future tense sentences, 2–3 sentences, little details and organization.
+- Accomplished (2): Present/past/future tenses, 3–4 lines, some details and organization, somewhat coherent.
+- Advanced (2.5): Narrative and descriptive paragraph, 4–5 lines, mostly coherent and organized.
+- Exemplary (3): Narrative and descriptive paragraph, 5–6 lines, coherent and organized well.
 
 VOCABULARY:
-- Beginning (1): 1-2 adjectives or connectives.
-- Developing (1.5): 1-2 adjectives, connectives, time phrases, or adverbs.
+- Beginning (1): 1–2 adjectives or connectives.
+- Developing (1.5): 1–2 adjectives, connectives, time phrases, or adverbs.
 - Accomplished (2): Some complex vocabulary including adjectives, adverbs, time phrases, or connectives.
-- Advanced (2.5): Few complex vocabulary including 2-3 adjectives, adverbs, time phrases, or connectives.
-- Exemplary (3): Range of complex vocabulary including 3-4 of each: adjectives, adverbs, time phrases, and connectives.
+- Advanced (2.5): Few complex vocabulary including 2–3 adjectives, adverbs, time phrases, or connectives.
+- Exemplary (3): Range of complex vocabulary including 3–4 of each: adjectives, adverbs, time phrases, and connectives.
 
 SENTENCE STRUCTURE:
 - Beginning (1): Short sentences with personal information. Very few errors.
 - Developing (1.5): Sentences with personal information and some variety of structures. Some complex words.
-- Accomplished (2): Short paragraph (30-40 words), some complex structures and connectives, medium-long sentences.
-- Advanced (2.5): Descriptive paragraph (40-50 words), complex words, variety of connectives, medium length.
-- Exemplary (3): Descriptive paragraph (50-60 words), variety of complex structures, full clarity, variety of connectives.
+- Accomplished (2): Short paragraph (30–40 words), some complex structures and connectives, medium-long sentences.
+- Advanced (2.5): Descriptive paragraph (40–50 words), complex words, variety of connectives, medium length.
+- Exemplary (3): Descriptive paragraph (50–60 words), variety of complex structures, full clarity, variety of connectives.
 
 GRAMMAR/SPELLING:
 - Beginning (1): 1 tense only, many spelling errors.
@@ -152,22 +152,22 @@ PURPOSE/CONTENT:
 - Exemplary (3): Most expressed clearly.
 
 ORGANIZATION/COHERENCY:
-- Beginning (1): 1 paragraph, 2-3 lines, minimal details. Little coherence.
-- Developing (1.5): 1 paragraph, 3-5 lines, little details. Some coherence.
-- Accomplished (2): 1 paragraph, 5-7 lines, some details. Somewhat coherent.
-- Advanced (2.5): 1 paragraph, 6-8 lines, details. Mostly coherent and organized.
-- Exemplary (3): 1 paragraph, 7-9 lines, details and organization. Coherent and organized well.
+- Beginning (1): 1 paragraph, 2–3 lines, minimal details. Little coherence.
+- Developing (1.5): 1 paragraph, 3–5 lines, little details. Some coherence.
+- Accomplished (2): 1 paragraph, 5–7 lines, some details. Somewhat coherent.
+- Advanced (2.5): 1 paragraph, 6–8 lines, details. Mostly coherent and organized.
+- Exemplary (3): 1 paragraph, 7–9 lines, details and organization. Coherent and organized well.
 
 VOCABULARY:
-- Beginning (1): 1-2 adjectives, adverbs, and connectives.
+- Beginning (1): 1–2 adjectives, adverbs, and connectives.
 - Developing (1.5): Few complex vocabulary including 2 adjectives/adverbs/time phrases/connectives.
 - Accomplished (2): Some complex vocabulary including 3 adjectives/adverbs/time phrases/connectives.
-- Advanced (2.5): Complex vocabulary including 2-3 of each: adjectives/adverbs/time phrases/connectives.
-- Exemplary (3): Wide range of complex vocabulary including 3-5 of each.
+- Advanced (2.5): Complex vocabulary including 2–3 of each: adjectives/adverbs/time phrases/connectives.
+- Exemplary (3): Wide range of complex vocabulary including 3–5 of each.
 
 SENTENCE STRUCTURE:
-- Beginning (1): Short descriptive paragraphs. Very few complex structures. 1-2 connectives.
-- Developing (1.5): Descriptive paragraphs with some variety of structures. Few complex structures. 2-3 connectives.
+- Beginning (1): Short descriptive paragraphs. Very few complex structures. 1–2 connectives.
+- Developing (1.5): Descriptive paragraphs with some variety of structures. Few complex structures. 2–3 connectives.
 - Accomplished (2): Few varieties of linguistic structures. Few complex structures. More than 3 connectives. Medium length. Somewhat organized.
 - Advanced (2.5): Some variety of complex structures, more than 4 connectives. Medium to long text. Well organized.
 - Exemplary (3): Variety of complex structures. Full clarity. More than 5 connectives. Well organized.
@@ -191,17 +191,17 @@ PURPOSE/CONTENT:
 - Exemplary (3): Most details communicated with clarity.
 
 ORGANIZATION/COHERENCY:
-- Beginning (1): 1 paragraph, 2-3 lines, minimal details. Little coherence.
-- Developing (1.5): 1 paragraph, 4-5 lines, little details. Some coherence.
-- Accomplished (2): 1 paragraph, 6-7 lines, some details. Somehow coherent.
-- Advanced (2.5): 1 paragraph, 8-9 lines, details. Mostly coherent and organized.
-- Exemplary (3): 1 paragraph, 10-12 lines minimum. Coherent and organized well.
+- Beginning (1): 1 paragraph, 2–3 lines, minimal details. Little coherence.
+- Developing (1.5): 1 paragraph, 4–5 lines, little details. Some coherence.
+- Accomplished (2): 1 paragraph, 6–7 lines, some details. Somehow coherent.
+- Advanced (2.5): 1 paragraph, 8–9 lines, details. Mostly coherent and organized.
+- Exemplary (3): 1 paragraph, 10–12 lines minimum. Coherent and organized well.
 
 VOCABULARY:
-- Beginning (1): 1-2 adjectives, adverbs, and connectives.
+- Beginning (1): 1–2 adjectives, adverbs, and connectives.
 - Developing (1.5): 1 of each: adjectives/adverbs/time phrases/connectives.
 - Accomplished (2): 2 of each: adjectives/adverbs/time phrases/connectives.
-- Advanced (2.5): 3-4 of each: adjectives/adverbs/time phrases/connectives.
+- Advanced (2.5): 3–4 of each: adjectives/adverbs/time phrases/connectives.
 - Exemplary (3): At least 5 of each: adjectives/adverbs/time phrases/connectives.
 
 SENTENCE STRUCTURE:
@@ -230,11 +230,11 @@ PURPOSE/CONTENT:
 - Exemplary (3): Most details communicated with clarity.
 
 ORGANIZATION/COHERENCY:
-- Beginning (1): Short paragraph, 4-5 lines, minimal details. Little coherence.
-- Developing (1.5): Short narrative text, 6-7 lines, little details. Some coherence.
-- Accomplished (2): Short narrative text, 8-9 lines, some details. Somehow coherent.
-- Advanced (2.5): Medium narrative text, 10-11 lines, details. Mostly coherent.
-- Exemplary (3): Long narrative text, 12-15 lines minimum. Coherent and well organized.
+- Beginning (1): Short paragraph, 4–5 lines, minimal details. Little coherence.
+- Developing (1.5): Short narrative text, 6–7 lines, little details. Some coherence.
+- Accomplished (2): Short narrative text, 8–9 lines, some details. Somehow coherent.
+- Advanced (2.5): Medium narrative text, 10–11 lines, details. Mostly coherent.
+- Exemplary (3): Long narrative text, 12–15 lines minimum. Coherent and well organized.
 
 VOCABULARY:
 - Beginning (1): No complex vocabulary. Few adjectives, adverbs, and connectives.
@@ -262,10 +262,10 @@ GRAMMAR/SPELLING:
 Writing Skill: 8 to 9 Years of Study
 
 PURPOSE/CONTENT:
-- Beginning (1): Task not communicated. Only 1-2 pieces of information. No clarity or elaboration.
+- Beginning (1): Task not communicated. Only 1–2 pieces of information. No clarity or elaboration.
 - Developing (1.5): Some parts communicated. Some information mentioned. Some clarity and expression.
 - Accomplished (2): Most of the task communicated. Many information points mentioned. Partial clarity and expression.
-- Advanced (2.5): Almost fully communicated. All required info except 1-2. Almost clear expression with justification.
+- Advanced (2.5): Almost fully communicated. All required info except 1–2. Almost clear expression with justification.
 - Exemplary (3): Fully communicated. All information mentioned. Clear expression of ideas and opinions with justification.
 
 ORGANIZATION/COHERENCY:
@@ -283,9 +283,9 @@ VOCABULARY:
 - Exemplary (3): Rich and precise vocabulary. At least 5 each of adjectives and adverbs/time phrases.
 
 SENTENCE STRUCTURE:
-- Beginning (1): Lacks linguistic structures. Only 1-2 connectives. Lots of ambiguity.
-- Developing (1.5): Very limited variety of linguistic structures. No complex high frequency words. 1-2 connectives. Many errors.
-- Accomplished (2): Some ability to use variety of linguistic structures. Little complex high frequency words. 1-2 connectives. Some errors.
+- Beginning (1): Lacks linguistic structures. Only 1–2 connectives. Lots of ambiguity.
+- Developing (1.5): Very limited variety of linguistic structures. No complex high frequency words. 1–2 connectives. Many errors.
+- Accomplished (2): Some ability to use variety of linguistic structures. Little complex high frequency words. 1–2 connectives. Some errors.
 - Advanced (2.5): Good ability to use variety of linguistic structures. Some complex high frequency words. 3+ connectives. Some errors.
 - Exemplary (3): Strong ability to use variety of linguistic structures. Complex high frequency words. Variety of connectives. Few errors.
 
@@ -298,72 +298,34 @@ GRAMMAR/SPELLING:
 """
 }
 
+
 # =============================================
 # HELPER FUNCTIONS
 # =============================================
 
-def get_rubric_by_year(year: int) -> tuple[str, str]:
-    """Return (label, rubric_text) for the given years of study."""
-    for key, rubric_text in RUBRICS.items():
-        if isinstance(key, str) and "-" in key:
-            try:
-                start, end = key.split("-")
-                if int(start.strip()) <= year <= int(end.strip()):
-                    return key, rubric_text
-            except ValueError:
-                continue
-    if year in RUBRICS: return str(year), RUBRICS[year]
-    if str(year) in RUBRICS: return str(year), RUBRICS[str(year)]
-    return "", ""
-
-def get_level_note(year: int) -> str:
-    """Return level-appropriate guidance for the prompt."""
-    if year <= 3: return "Beginner student. Focus on basic sentence structure and present tense."
-    elif year <= 5: return "Elementary student. Expect simple paragraphs and basic connectives."
-    elif year <= 7: return "Intermediate student. Expect coherent paragraphs and complex structures."
-    else: return "Advanced student. Expect multi-paragraph writing and rich vocabulary."
-
-def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_key: str, rubric: str, word_bank: str = '') -> str:
-    first_name = name.strip().split()[0] if name.strip() else name
-    tip_count = 3 if year <= 4 else 5
-    level_note = get_level_note(year)
-    word_bank_section = f"""The teacher has provided a word bank: {word_bank}. 
-Check if used, and suggest relevant unused words.""" if word_bank.strip() else "No word bank provided."
-
-    return f"""
-You are a warm, supportive Arabic teacher giving personalised feedback.
-STUDENT PROFILE: Name: {name}, Years of Learning: {year}.
-LEVEL GUIDANCE: {level_note}
-LEARNING OBJECTIVE: {lo if lo.strip() else "Not provided."}
-SUCCESS CRITERIA: {sc if sc.strip() else "Not provided."}
-RUBRIC: {rubric}
-WORD BANK: {word_bank_section}
-
-STUDENT WRITING:
-{writing}
-
-OUTPUT FORMAT:
-### 👋 Hello, {first_name}!
-### ⭐ WWW — What Went Well: (2 specific strengths)
-### 🔴 EBI — Even Better If: (1 main improvement point. Quote error, give hint. Do NOT rewrite)
-### ✏️ Spelling Corrections: (❌ wrong → ✅ correct)
-### 🏗️ Structure Advice: (1-2 sentences)
-### 🟡 Success Criteria Check: (✔ or ✖)
-### 🟢 Top {tip_count} Tips to Improve:
-### 🔵 Rubric Level: (Level, Score / 15, Why)
-### 💪 Next Step: (One clear target starting with "Next time, try to...")
-"""
-
 def get_api_key() -> str:
-    """Retrieve OpenAI API key."""
+    """Retrieve OpenAI API key from secrets or environment."""
     api_key = st.secrets.get("OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    if not api_key: raise ValueError("OPENAI_API_KEY not found in secrets.")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY not found in secrets or environment.")
     return api_key
 
-def convert_to_pil_image(uploaded_file) -> list:
-    """Convert any uploaded file to PIL Images."""
+def get_rubric_by_year(year: int) -> tuple[str, str]:
+    """Return (range_key, rubric_text) for the given years of study."""
+    for key, rubric_text in RUBRICS.items():
+        try:
+            start, end = key.split("-")
+            if int(start.strip()) <= year <= int(end.strip()):
+                return key, rubric_text
+        except ValueError:
+            continue
+    return "", ""
+
+def process_uploaded_file_to_b64(uploaded_file) -> list:
+    """Converts uploaded images/PDFs/HEICs into a list of base64 strings."""
     filename = uploaded_file.name.lower()
-    images = []
+    b64_images = []
+
     if filename.endswith(".pdf"):
         if PDF_SUPPORTED:
             data = uploaded_file.read()
@@ -371,38 +333,130 @@ def convert_to_pil_image(uploaded_file) -> list:
             for page in doc:
                 pix = page.get_pixmap(dpi=200)
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                images.append(img)
+                buffer = io.BytesIO()
+                img.save(buffer, format="JPEG")
+                b64_images.append(base64.b64encode(buffer.getvalue()).decode("utf-8"))
     else:
         img = Image.open(uploaded_file)
-        if img.mode != "RGB": img = img.convert("RGB")
-        images.append(img)
-    return images
-
-def extract_arabic_from_image_openai(uploaded_file) -> str:
-    """Use OpenAI Vision to extract Arabic text."""
-    client = openai.OpenAI(api_key=get_api_key())
-    images = convert_to_pil_image(uploaded_file)
-    all_text = []
-    for img in images:
+        if img.mode != "RGB":
+            img = img.convert("RGB")
         buffer = io.BytesIO()
         img.save(buffer, format="JPEG")
-        b64_image = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        b64_images.append(base64.b64encode(buffer.getvalue()).decode("utf-8"))
+        
+    return b64_images
 
+def extract_text_with_openai(uploaded_file, instruction: str) -> str:
+    """Uses OpenAI Vision to extract text from any supported file."""
+    client = openai.OpenAI(api_key=get_api_key())
+    b64_images = process_uploaded_file_to_b64(uploaded_file)
+    
+    all_text = []
+    for b64_img in b64_images:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "user", "content": [
-                    {"type": "text", "text": "Transcribe ALL handwritten Arabic text exactly as written. Return ONLY the Arabic text."},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}}
-                ]}
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": instruction},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
+                    ]
+                }
             ],
             max_tokens=1500
         )
         all_text.append(response.choices[0].message.content.strip())
+        
     return "\n".join(all_text)
 
+def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_key: str, rubric: str) -> str:
+    """Your exact original prompt structure."""
+    first_name = name.strip().split()[0] if name.strip() else name
+    tip_count = 3 if year <= 4 else 5
+
+    return f"""
+You are a warm, encouraging Arabic Writing Assessment Assistant for non-native students.
+
+STUDENT PROFILE:
+- Name: {name}
+- Years of Learning Arabic: {year} (Rubric level: {rubric_key} years)
+
+PERSONALIZATION RULES:
+- Address the student directly by first name "{first_name}" throughout the feedback.
+- Open with one genuine, specific compliment about something positive in their writing.
+- Use "you / your" language — make feedback feel like a conversation, not a report.
+- End with a short motivational closing line addressed to {first_name}.
+- Keep language simple, clear, and age-appropriate.
+
+LEARNING OBJECTIVE (LO):
+{lo if lo.strip() else "Not provided."}
+
+SUCCESS CRITERIA:
+{sc if sc.strip() else "Not provided."}
+
+RUBRIC ({rubric_key} years of study):
+{rubric}
+
+STUDENT WRITING:
+{writing}
+
+───────────────────────────────────────────
+OUTPUT FORMAT (follow exactly — use these headings and emojis):
+
+### 👋 Hello, {first_name}! Here's your writing feedback:
+
+**What you did well:** (1–2 sentences — specific and genuine, based on the actual writing)
+
+---
+
+### 🔴 Key Mistakes to Fix:
+(Identify the 3–5 MOST IMPORTANT errors only. Do not list everything.)
+
+For each mistake use this exact format:
+> **Quote:** "exact text from student writing"
+> **Category:** Grammar / Spelling / Vocabulary / Sentence Structure
+> **What's wrong:** (1 sentence, plain language)
+> **Hint:** (guide toward the fix — do NOT rewrite or give the answer)
+
+---
+
+### 🟡 Success Criteria Check:
+(Only if Success Criteria were provided — otherwise skip this section)
+- ✔ [Criterion] — briefly explain why it's met
+- ✖ [Criterion] — briefly explain why it's not yet met
+
+---
+
+### 🟢 Top {tip_count} Tips to Improve:
+(Actionable, specific to {first_name}'s actual errors — no generic advice)
+1.
+2.
+3.
+{"4.\n5." if tip_count == 5 else ""}
+
+---
+
+### 🔵 Rubric Level:
+- **Level:** Beginning / Developing / Accomplished / Advanced / Exemplary
+- **Score estimate:** X / 15
+- **Why:** (2–3 sentences directly tied to the rubric for {rubric_key} years of study, referencing specific criteria)
+
+---
+
+### 💪 Keep going, {first_name}!
+(1 warm, motivational sentence personalized to their effort or a specific strength you noticed)
+
+───────────────────────────────────────────
+STRICT RULES — NEVER BREAK THESE:
+- NEVER rewrite the student's full text
+- NEVER provide fully corrected sentences
+- DO NOT overwhelm — prioritize the most impactful feedback only
+- DO NOT give generic advice — tie everything to the student's actual writing
+"""
+
 def assess_with_openai(prompt: str) -> str:
-    """Generate final feedback using OpenAI."""
+    """Call OpenAI API and return the assessment text."""
     client = openai.OpenAI(api_key=get_api_key())
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -411,75 +465,193 @@ def assess_with_openai(prompt: str) -> str:
     )
     return response.choices[0].message.content
 
+
 # =============================================
 # STREAMLIT UI
 # =============================================
-st.set_page_config(page_title="مُقيِّم الكتابة العربية", page_icon="🌙", layout="wide")
 
+st.set_page_config(
+    page_title="Arabic Writing Assessor",
+    page_icon="📝",
+    layout="wide"
+)
+
+# --- Your Exact Original CSS ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&display=swap');
-    .stApp { background: linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 40%, #0d1a2e 100%); color: #f0e6d3; font-family: 'Tajawal', sans-serif; }
-    h1, h2, h3, h4 { color: #d4af37 !important; }
-    .hero-banner { text-align: center; padding: 2.5rem; border-radius: 20px; background: #1a0a2e; margin-bottom: 2rem; border: 1px solid rgba(212,175,55,0.4); box-shadow: 0 10px 30px rgba(0,0,0,0.5);}
-    .hero-arabic { font-size: 2.8rem; color: #d4af37; font-weight: bold; }
-    .stButton > button { background: linear-gradient(145deg, #d4af37, #b8941f) !important; color: #0d0d1a !important; font-weight: bold !important; border-radius: 12px !important; }
-    .section-title { font-size: 1.1rem; font-weight: 700; color: #d4af37; margin-bottom: 1rem; }
-    .feedback-box { background: rgba(26,10,46,0.9); border: 1px solid rgba(212,175,55,0.35); border-radius: 16px; padding: 2rem; margin-top: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-    /* Hide Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    .main-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 0.2rem;
+    }
+    .subtitle {
+        color: #555;
+        font-size: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .rubric-badge {
+        background: #e8f4fd;
+        border-left: 4px solid #2196F3;
+        padding: 0.6rem 1rem;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
+    .stTextArea textarea {
+        font-family: 'Arial', sans-serif;
+        font-size: 1rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="hero-banner"><div class="hero-arabic">مُقيِّم الكتابة العربية</div><div>Arabic Writing Assessor (Powered by OpenAI)</div></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">📝 Arabic Writing Assessor</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI-powered feedback for non-native Arabic learners — powered by OpenAI</div>', unsafe_allow_html=True)
 
+st.divider()
+
+# =============================================
+# LAYOUT
+# =============================================
 col_left, col_right = st.columns([1, 1], gap="large")
 
-with col_left:
-    st.markdown('<div class="section-title">🌙 Student Profile</div>', unsafe_allow_html=True)
-    name = st.text_input("Student Name")
-    year = st.slider("Years of Learning Arabic", 2, 9, 5)
-    rubric_key, rubric_text = get_rubric_by_year(year)
-    if rubric_key: st.success(f"📊 Rubric applied: {rubric_key} Years of Study")
+# List of all supported extensions to keep code clean
+all_extensions = ["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp", "pdf"]
 
-    st.markdown('<div class="section-title">🎯 Goals & Criteria</div>', unsafe_allow_html=True)
-    lo_text = st.text_area("Learning Objective (LO)", height=70)
-    sc_text = st.text_area("Success Criteria", height=70)
-    use_word_bank = st.toggle("Enable Word Bank")
-    word_bank_text = st.text_area("Word Bank (comma-separated)") if use_word_bank else ""
+with col_left:
+    st.subheader("👤 Student Info")
+
+    name = st.text_input("Student Name", placeholder="e.g. Sara Ahmed")
+
+    year = st.slider(
+        "Years of Learning Arabic",
+        min_value=2, max_value=9, value=5,
+        help="Drag to select how many years the student has been learning Arabic"
+    )
+
+    rubric_key, rubric_text = get_rubric_by_year(year)
+    if rubric_key:
+        st.markdown(f'<div class="rubric-badge">📊 Rubric applied: <strong>{rubric_key} Years of Study</strong></div>', unsafe_allow_html=True)
+    else:
+        st.warning("No rubric found for this year range.")
+
+    st.divider()
+
+    st.subheader("🎯 Learning Objective (LO)")
+    lo_text = st.text_area("Type the LO here", height=100, placeholder="e.g. Student can write a descriptive paragraph about their daily routine using past tense.")
+    
+    # 🔴 Fixed Extensions Here 🔴
+    lo_img = st.file_uploader("Or upload LO as image", type=all_extensions, key="lo_img")
+    if lo_img:
+        with st.spinner("Extracting LO text..."):
+            lo_extracted = extract_text_with_openai(lo_img, "Extract all the text from this image accurately.")
+            if lo_extracted:
+                st.success("✅ LO extracted from image")
+                lo_text = lo_extracted
+
+    st.subheader("✅ Success Criteria")
+    sc_text = st.text_area("Type Success Criteria here", height=100, placeholder="e.g. Uses at least 3 connectives, writes 6–8 lines, uses past and present tense.")
+    
+    # 🔴 Fixed Extensions Here 🔴
+    sc_img = st.file_uploader("Or upload Success Criteria as image", type=all_extensions, key="sc_img")
+    if sc_img:
+        with st.spinner("Extracting Success Criteria text..."):
+            sc_extracted = extract_text_with_openai(sc_img, "Extract all the text from this image accurately.")
+            if sc_extracted:
+                st.success("✅ Success Criteria extracted from image")
+                sc_text = sc_extracted
 
 with col_right:
-    st.markdown('<div class="section-title">✍️ Student Writing</div>', unsafe_allow_html=True)
-    writing_tab1, writing_tab2 = st.tabs(["⌨️ Type Text", "📷 Upload Photo"])
-    writing = ""
+    st.subheader("✍️ Student Writing")
     
+    # Added tabs so you can still upload student writing like you requested!
+    writing_tab1, writing_tab2 = st.tabs(["⌨️ Type / Paste Text", "📷 Upload Handwritten Photo"])
+    
+    writing = ""
+
     with writing_tab1:
-        writing_typed = st.text_area("Type student's writing here", height=200)
-        if writing_typed: writing = writing_typed
-        
+        writing_typed = st.text_area(
+            "Paste or type the student's Arabic writing here",
+            height=320,
+            placeholder="اكتب هنا...",
+            help="You can paste Arabic text directly into this box."
+        )
+        if writing_typed.strip():
+            writing = writing_typed
+
     with writing_tab2:
-        writing_imgs = st.file_uploader("Upload handwriting photo", type=["png", "jpg", "jpeg", "pdf"], accept_multiple_files=True)
+        # 🔴 Fixed Extensions Here 🔴
+        writing_imgs = st.file_uploader(
+            "Upload handwriting photo(s) or PDF",
+            type=all_extensions,
+            key="writing_img",
+            accept_multiple_files=True
+        )
         if writing_imgs:
             all_extracted = []
-            with st.spinner("🔍 Reading handwritten files with GPT-4o..."):
+            for img in writing_imgs:
+                st.image(img, use_column_width=True)
+            with st.spinner("🔍 Reading handwritten files with OpenAI..."):
                 for img in writing_imgs:
-                    st.image(img, use_column_width=True)
-                    all_extracted.append(extract_arabic_from_image_openai(img))
-            writing = "\n".join(all_extracted)
-            st.markdown(f"**📝 Extracted text:**\n> {writing}")
+                    try:
+                        extracted = extract_text_with_openai(img, "Transcribe ALL the handwritten Arabic text exactly as written, including any spelling mistakes. Return ONLY the Arabic text.")
+                        all_extracted.append(extracted)
+                    except Exception as e:
+                        st.error(f"❌ Could not read file: {str(e)}")
+            
+            if all_extracted:
+                writing = "\n".join(all_extracted)
+                st.markdown(f"**📝 Extracted text:**\n> {writing}")
 
-    assess_btn = st.button("🔍 Assess Writing", use_container_width=True, disabled=not(name and writing and rubric_key))
+    word_count = len(writing.split()) if writing.strip() else 0
+    st.caption(f"Word count: ~{word_count} words")
 
+    st.divider()
+
+    assess_btn = st.button(
+        "🔍 Assess Writing",
+        type="primary",
+        use_container_width=True,
+        disabled=not (name.strip() and writing.strip() and rubric_key)
+    )
+
+    if not name.strip():
+        st.caption("⚠️ Please enter the student's name.")
+    if not writing.strip():
+        st.caption("⚠️ Please enter the student's writing.")
+    if not rubric_key:
+        st.caption("⚠️ No rubric available for the selected year.")
+
+# =============================================
+# ASSESSMENT OUTPUT
+# =============================================
 if assess_btn:
     st.divider()
-    with st.spinner(f"✨ Assessing {name}'s writing with OpenAI GPT-4o..."):
+    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with OpenAI..."):
         try:
-            prompt = build_prompt(name, year, lo_text, sc_text, writing, rubric_key, rubric_text, word_bank_text)
+            prompt = build_prompt(
+                name=name.strip(),
+                year=year,
+                lo=lo_text.strip(),
+                sc=sc_text.strip(),
+                writing=writing.strip(),
+                rubric_key=rubric_key,
+                rubric=rubric_text
+            )
             result = assess_with_openai(prompt)
-            st.markdown('<div class="feedback-box">', unsafe_allow_html=True)
+
+            st.subheader("📊 Assessment Feedback")
             st.markdown(result)
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.download_button("⬇️ Download Feedback", data=result, file_name=f"feedback_{name}.txt", mime="text/plain")
+
+            st.divider()
+            st.download_button(
+                label="⬇️ Download Feedback as .txt",
+                data=result,
+                file_name=f"feedback_{name.strip().replace(' ', '_')}.txt",
+                mime="text/plain"
+            )
+
+        except openai.AuthenticationError:
+            st.error("❌ Invalid API key. Please check your OPENAI_API_KEY in Streamlit Secrets.")
         except Exception as e:
             st.error(f"❌ An error occurred: {str(e)}")
