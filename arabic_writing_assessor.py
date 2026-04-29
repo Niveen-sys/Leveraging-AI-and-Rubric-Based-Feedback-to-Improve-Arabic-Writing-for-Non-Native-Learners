@@ -287,14 +287,37 @@ GRAMMAR/SPELLING:
 # =============================================
 
 def get_rubric_by_year(year: int) -> tuple[str, str]:
-    """Return (range_key, rubric_text) for the given years of study."""
+    """
+    Return (label, rubric_text) for the given years of study.
+    Supports three key formats in RUBRICS:
+      1. String range  e.g. "2-3", "3-4"  (PPTX-loaded rubrics)
+      2. Integer       e.g. 2, 3, 4        (simple rubric dict)
+      3. String int    e.g. "2", "3"        (JSON-loaded rubrics)
+    """
+    # Pass 1: string range keys e.g. "2-3"
     for key, rubric_text in RUBRICS.items():
-        try:
-            start, end = key.split("-")
-            if int(start.strip()) <= year <= int(end.strip()):
-                return key, rubric_text
-        except ValueError:
-            continue
+        if isinstance(key, str) and "-" in key:
+            try:
+                start, end = key.split("-")
+                if int(start.strip()) <= year <= int(end.strip()):
+                    return key, rubric_text
+            except ValueError:
+                continue
+
+    # Pass 2: exact integer key e.g. 5
+    if year in RUBRICS:
+        return str(year), RUBRICS[year]
+
+    # Pass 3: exact string-integer key e.g. "5"
+    if str(year) in RUBRICS:
+        return str(year), RUBRICS[str(year)]
+
+    # Pass 4: closest integer key (fallback)
+    int_keys = [k for k in RUBRICS if isinstance(k, int)]
+    if int_keys:
+        closest = min(int_keys, key=lambda k: abs(k - year))
+        return str(closest), RUBRICS[closest]
+
     return "", ""
 
 
@@ -308,23 +331,33 @@ def extract_text_from_image(uploaded_file) -> str:
         return ""
 
 
+def get_level_note(year: int) -> str:
+    """Return level-appropriate guidance for the prompt."""
+    if year <= 3:
+        return "This is a beginner student. Focus on basic sentence structure, simple vocabulary, and present tense. Keep expectations simple and very encouraging."
+    elif year <= 5:
+        return "This is an elementary student. Expect simple paragraphs, 2–3 tenses, and basic connectives. Encourage growth in vocabulary and sentence variety."
+    elif year <= 7:
+        return "This is an intermediate student. Expect coherent paragraphs, variety of tenses, connectives, and some complex structures."
+    else:
+        return "This is an advanced student. Expect multi-paragraph writing, rich vocabulary, all tenses, complex structures, and strong coherence."
+
+
 def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_key: str, rubric: str) -> str:
     first_name = name.strip().split()[0] if name.strip() else name
     tip_count = 3 if year <= 4 else 5
+    level_note = get_level_note(year)
 
     return f"""
-You are a warm, encouraging Arabic Writing Assessment Assistant for non-native students.
+You are a warm, supportive Arabic teacher giving personalised feedback to a non-native student.
 
 STUDENT PROFILE:
 - Name: {name}
+- First name: {first_name}
 - Years of Learning Arabic: {year} (Rubric level: {rubric_key} years)
 
-PERSONALIZATION RULES:
-- Address the student directly by first name "{first_name}" throughout the feedback.
-- Open with one genuine, specific compliment about something positive in their writing.
-- Use "you / your" language — make feedback feel like a conversation, not a report.
-- End with a short motivational closing line addressed to {first_name}.
-- Keep language simple, clear, and age-appropriate.
+LEVEL GUIDANCE:
+{level_note}
 
 LEARNING OBJECTIVE (LO):
 {lo if lo.strip() else "Not provided."}
@@ -341,32 +374,55 @@ STUDENT WRITING:
 ───────────────────────────────────────────
 OUTPUT FORMAT (follow exactly — use these headings and emojis):
 
-### 👋 Hello, {first_name}! Here's your writing feedback:
-
-**What you did well:** (1–2 sentences — specific and genuine, based on the actual writing)
+### 👋 Hello, {first_name}!
+Start with one warm, personalised sentence using the student's name that references something specific and positive from their actual writing.
+Example style: "Well done, {first_name}, you did a great job using..."
 
 ---
 
-### 🔴 Key Mistakes to Fix:
-(Identify the 3–5 MOST IMPORTANT errors only. Do not list everything.)
+### ⭐ WWW — What Went Well:
+Give exactly TWO clear strengths. Be specific — refer directly to the student's writing.
+Use {first_name}'s name naturally at least once here.
 
-For each mistake use this exact format:
+- **Strength 1:** ...
+- **Strength 2:** ...
+
+---
+
+### 🔴 EBI — Even Better If:
+Give exactly ONE main improvement point. Keep it achievable and kind.
+Do NOT list everything — pick the single most important issue.
+
 > **Quote:** "exact text from student writing"
 > **Category:** Grammar / Spelling / Vocabulary / Sentence Structure
 > **What's wrong:** (1 sentence, plain language)
-> **Hint:** (guide toward the fix — do NOT rewrite or give the answer)
+> **Hint:** Guide {first_name} toward the fix — do NOT rewrite or give the full answer
+
+---
+
+### ✏️ Spelling Corrections:
+List spelling mistakes found in the writing using this format only:
+- ❌ wrong word → ✅ correct word
+
+(If no spelling errors, write: "Great job — no spelling errors found! 🎉")
+
+---
+
+### 🏗️ Structure Advice:
+Give 1–2 sentences of structure advice adapted to {first_name}'s level ({year} years of study).
+Base this on the rubric expectations for this level.
 
 ---
 
 ### 🟡 Success Criteria Check:
-(Only if Success Criteria were provided — otherwise skip this section)
+(Only include if Success Criteria were provided — otherwise skip this section entirely)
 - ✔ [Criterion] — briefly explain why it's met
 - ✖ [Criterion] — briefly explain why it's not yet met
 
 ---
 
 ### 🟢 Top {tip_count} Tips to Improve:
-(Actionable, specific to {first_name}'s actual errors — no generic advice)
+Actionable tips specific to {first_name}'s actual writing — no generic advice.
 1.
 2.
 3.
@@ -377,18 +433,22 @@ For each mistake use this exact format:
 ### 🔵 Rubric Level:
 - **Level:** Beginning / Developing / Accomplished / Advanced / Exemplary
 - **Score estimate:** X / 15
-- **Why:** (2–3 sentences directly tied to the rubric for {rubric_key} years of study, referencing specific criteria)
+- **Why:** 2–3 sentences tied directly to the rubric for {rubric_key} years of study.
 
 ---
 
-### 💪 Keep going, {first_name}!
-(1 warm, motivational sentence personalized to their effort or a specific strength you noticed)
+### 💪 Next Step:
+End with one clear, simple target sentence starting with:
+"Next time, try to..."
+Then close with one warm motivational line addressed to {first_name}.
 
 ───────────────────────────────────────────
 STRICT RULES — NEVER BREAK THESE:
 - NEVER rewrite the student's full text
 - NEVER provide fully corrected sentences
-- DO NOT overwhelm — prioritize the most impactful feedback only
+- Use {first_name}'s name naturally — not in every sentence, but enough to feel personal
+- Keep tone encouraging, honest, and simple
+- Adapt all expectations to the student's level ({year} years of study)
 - DO NOT give generic advice — tie everything to the student's actual writing
 """
 
