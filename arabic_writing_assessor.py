@@ -964,26 +964,33 @@ with col_right:
 
     with writing_tab2:
         st.info("📸 Upload a photo of the student's handwritten Arabic. Gemini will read it automatically.")
-        st.caption("📱 Supports: JPG, PNG, HEIC (iPhone), PDF, WEBP, BMP")
-        writing_img = st.file_uploader(
-            "Upload handwriting photo or PDF",
+        st.caption("📱 Supports: JPG, PNG, HEIC (iPhone), PDF, WEBP, BMP — single or multiple photos")
+        writing_imgs = st.file_uploader(
+            "Upload handwriting photo(s) or PDF",
             type=["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp", "pdf"],
-            key="writing_img"
+            key="writing_img",
+            accept_multiple_files=True
         )
-        if writing_img:
-            st.image(writing_img, caption="Uploaded handwriting", use_column_width=True)
-            with st.spinner("🔍 Reading Arabic handwriting..."):
-                try:
-                    extracted_writing = extract_arabic_from_image_gemini(writing_img)
-                    if extracted_writing:
-                        st.success("✅ Arabic text extracted successfully!")
-                        st.markdown("**Extracted text:**")
-                        st.markdown(f"> {extracted_writing}")
-                        writing = extracted_writing
-                    else:
-                        st.warning("⚠️ Could not extract text. Please try a clearer photo.")
-                except Exception as e:
-                    st.error(f"❌ Could not read image: {str(e)}")
+        if writing_imgs:
+            all_extracted = []
+            for i, writing_img in enumerate(writing_imgs):
+                st.image(writing_img, caption=f"📄 Page {i+1}: {writing_img.name}", use_column_width=True)
+            with st.spinner(f"🔍 Reading {len(writing_imgs)} file(s)..."):
+                for i, writing_img in enumerate(writing_imgs):
+                    try:
+                        extracted = extract_arabic_from_image_gemini(writing_img)
+                        if extracted:
+                            all_extracted.append(extracted)
+                            st.success(f"✅ File {i+1} extracted successfully!")
+                        else:
+                            st.warning(f"⚠️ Could not extract text from file {i+1}. Try a clearer photo.")
+                    except Exception as e:
+                        st.error(f"❌ Could not read file {i+1}: {str(e)}")
+            if all_extracted:
+                extracted_writing = "\n".join(all_extracted)
+                st.markdown("**📝 Extracted text:**")
+                st.markdown(f"> {extracted_writing}")
+                writing = extracted_writing
 
     if writing.strip():
         word_count = len(writing.split())
