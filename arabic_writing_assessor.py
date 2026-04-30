@@ -1,5 +1,5 @@
 import streamlit as st
-import openai
+import anthropic
 import os
 import base64
 import io
@@ -483,10 +483,10 @@ STRICT RULES — NEVER BREAK THESE:
 
 
 def get_api_key() -> str:
-    """Retrieve OpenAI API key from secrets or environment."""
-    api_key = st.secrets.get("OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    """Retrieve Anthropic API key from secrets or environment."""
+    api_key = st.secrets.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        raise ValueError("OPENAI_API_KEY not found in secrets or environment.")
+        raise ValueError("ANTHROPIC_API_KEY not found in secrets or environment.")
     return api_key
 
 
@@ -516,9 +516,9 @@ def convert_to_pil_image(uploaded_file) -> list:
 
 
 def extract_arabic_from_image_gemini(uploaded_file) -> str:
-    """Use OpenAI Vision to extract Arabic handwriting from any uploaded file."""
+    """Use Claude Vision to extract Arabic handwriting from any uploaded file."""
     api_key = get_api_key()
-    client = openai.OpenAI(api_key=api_key)
+    client = anthropic.Anthropic(api_key=api_key)
 
     images = convert_to_pil_image(uploaded_file)
 
@@ -529,15 +529,20 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
         img.save(buffer, format="JPEG")
         b64_image = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-        response = client.chat.completions.create(
-            model="gpt-4o",
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20251001",
+            max_tokens=1000,
             messages=[
                 {
                     "role": "user",
                     "content": [
                         {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": b64_image
+                            }
                         },
                         {
                             "type": "text",
@@ -548,24 +553,23 @@ Return ONLY the Arabic text, nothing else."""
                         }
                     ]
                 }
-            ],
-            max_tokens=1000
+            ]
         )
-        all_text.append(response.choices[0].message.content.strip())
+        all_text.append(response.content[0].text.strip())
 
     return "\n".join(all_text)
 
 
 def assess_with_gemini(prompt: str) -> str:
-    """Call OpenAI API and return the assessment text."""
+    """Call Anthropic Claude API and return the assessment text."""
     api_key = get_api_key()
-    client = openai.OpenAI(api_key=api_key)
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=2000
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model="claude-sonnet-4-5-20251001",
+        max_tokens=2000,
+        messages=[{"role": "user", "content": prompt}]
     )
-    return response.choices[0].message.content
+    return response.content[0].text
 
 
 # =============================================
@@ -987,7 +991,7 @@ with col_right:
             writing = writing_typed
 
     with writing_tab2:
-        st.info("📸 Upload a photo of the student's handwritten Arabic. GPT-4o will read it automatically.")
+        st.info("📸 Upload a photo of the student's handwritten Arabic. Claude will read it automatically.")
         st.caption("📱 Supports: JPG, PNG, HEIC (iPhone), PDF, WEBP, BMP — single or multiple photos")
         writing_imgs = st.file_uploader(
             "Upload handwriting photo(s) or PDF",
@@ -1041,7 +1045,7 @@ with col_right:
 # =============================================
 if assess_btn:
     st.divider()
-    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with OpenAI..."):
+    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with Claude..."):
         try:
             prompt = build_prompt(
                 name=name.strip(),
