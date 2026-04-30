@@ -1,6 +1,7 @@
 streamlit
-anthropic
+groq
 pytesseract
 pymupdf
 pillow-heif
 pandas
+google-generativeai
