@@ -1,5 +1,6 @@
 streamlit
-openai
-Pillow
+anthropic
+pytesseract
 pymupdf
 pillow-heif
+pandas
