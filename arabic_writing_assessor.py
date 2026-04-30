@@ -1,6 +1,8 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 import os
+import base64
+import io
 from PIL import Image
 import pytesseract
 
@@ -481,10 +483,10 @@ STRICT RULES — NEVER BREAK THESE:
 
 
 def get_api_key() -> str:
-    """Retrieve Gemini API key from secrets or environment."""
-    api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    """Retrieve Groq API key from secrets or environment."""
+    api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY not found in secrets or environment.")
+        raise ValueError("GROQ_API_KEY not found in secrets or environment.")
     return api_key
 
 
@@ -514,34 +516,55 @@ def convert_to_pil_image(uploaded_file) -> list:
 
 
 def extract_arabic_from_image_gemini(uploaded_file) -> str:
-    """Use Gemini Vision to extract Arabic handwriting from any uploaded file."""
+    """Use Groq Vision to extract Arabic handwriting from any uploaded file."""
     api_key = get_api_key()
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    client = Groq(api_key=api_key)
 
     images = convert_to_pil_image(uploaded_file)
 
     all_text = []
     for img in images:
-        response = model.generate_content([
-            img,
-            """This image contains handwritten Arabic text written by a student.
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG")
+        b64_image = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}
+                        },
+                        {
+                            "type": "text",
+                            "text": """This image contains handwritten Arabic text written by a student.
 Please transcribe ALL the Arabic text exactly as written — including any spelling mistakes.
 Do NOT correct errors. Do NOT add punctuation that is not there.
 Return ONLY the Arabic text, nothing else."""
-        ])
-        all_text.append(response.text.strip())
+                        }
+                    ]
+                }
+            ],
+            max_tokens=1000
+        )
+        all_text.append(response.choices[0].message.content.strip())
 
     return "\n".join(all_text)
 
 
 def assess_with_gemini(prompt: str) -> str:
-    """Call Gemini API and return the assessment text."""
+    """Call Groq API and return the assessment text."""
     api_key = get_api_key()
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(prompt)
-    return response.text
+    client = Groq(api_key=api_key)
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=2000
+    )
+    return response.choices[0].message.content
 
 
 # =============================================
@@ -571,8 +594,10 @@ st.markdown("""
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
         background-image:
-            repeating-linear-gradient(45deg, rgba(212,175,55,0.03) 0px, rgba(212,175,55,0.03) 1px, transparent 1px, transparent 40px),
-            repeating-linear-gradient(-45deg, rgba(212,175,55,0.03) 0px, rgba(212,175,55,0.03) 1px, transparent 1px, transparent 40px);
+            repeating-linear-gradient(45deg, rgba(212,175,55,0.04) 0px, rgba(212,175,55,0.04) 1px, transparent 1px, transparent 40px),
+            repeating-linear-gradient(-45deg, rgba(212,175,55,0.04) 0px, rgba(212,175,55,0.04) 1px, transparent 1px, transparent 40px),
+            repeating-linear-gradient(0deg, rgba(212,175,55,0.02) 0px, rgba(212,175,55,0.02) 1px, transparent 1px, transparent 80px),
+            repeating-linear-gradient(90deg, rgba(212,175,55,0.02) 0px, rgba(212,175,55,0.02) 1px, transparent 1px, transparent 80px);
         pointer-events: none;
         z-index: 0;
     }
@@ -580,62 +605,80 @@ st.markdown("""
     /* ── Hero Header ── */
     .hero-banner {
         background: linear-gradient(135deg, #1a0a2e 0%, #2d1554 50%, #1a0a2e 100%);
-        border: 1px solid rgba(212,175,55,0.4);
-        border-radius: 20px;
-        padding: 2.5rem 2rem;
+        border: 2px solid rgba(212,175,55,0.5);
+        border-radius: 24px;
+        padding: 3rem 2rem;
         margin-bottom: 2rem;
         text-align: center;
         position: relative;
         overflow: hidden;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(212,175,55,0.3);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(212,175,55,0.4), 0 0 80px rgba(212,175,55,0.05);
     }
 
     .hero-banner::before {
-        content: "✦ ✧ ✦";
+        content: "بِسْمِ اللهِ الرَّحْمٰنِ الرَّحِيْمِ";
         position: absolute;
-        top: 12px;
+        top: 10px;
         left: 50%;
         transform: translateX(-50%);
-        color: rgba(212,175,55,0.5);
-        font-size: 0.8rem;
-        letter-spacing: 8px;
+        color: rgba(212,175,55,0.4);
+        font-family: 'Scheherazade New', serif;
+        font-size: 0.85rem;
+        letter-spacing: 3px;
+        white-space: nowrap;
     }
 
     .hero-banner::after {
-        content: "✦ ✧ ✦";
+        content: "❧ ✦ ❧";
         position: absolute;
-        bottom: 12px;
+        bottom: 10px;
         left: 50%;
         transform: translateX(-50%);
         color: rgba(212,175,55,0.5);
-        font-size: 0.8rem;
+        font-size: 1rem;
         letter-spacing: 8px;
+    }
+
+    /* Arabic corner decorations */
+    .hero-corner-tl, .hero-corner-tr, .hero-corner-bl, .hero-corner-br {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border-color: rgba(212,175,55,0.4);
+        border-style: solid;
     }
 
     .hero-arabic {
         font-family: 'Scheherazade New', serif;
-        font-size: 2.8rem;
+        font-size: 3.2rem;
         font-weight: 700;
         color: #d4af37;
-        text-shadow: 0 0 30px rgba(212,175,55,0.4), 0 2px 4px rgba(0,0,0,0.8);
-        margin: 0;
+        text-shadow: 0 0 40px rgba(212,175,55,0.5), 0 2px 4px rgba(0,0,0,0.8), 0 0 80px rgba(212,175,55,0.2);
+        margin: 0.5rem 0 0 0;
         line-height: 1.3;
     }
 
     .hero-english {
         font-family: 'Cinzel Decorative', serif;
         font-size: 1.1rem;
-        color: rgba(212,175,55,0.8);
+        color: rgba(212,175,55,0.85);
         margin-top: 0.5rem;
-        letter-spacing: 3px;
+        letter-spacing: 4px;
         text-transform: uppercase;
     }
 
     .hero-sub {
         font-family: 'Tajawal', sans-serif;
-        font-size: 0.95rem;
-        color: rgba(200,200,255,0.7);
+        font-size: 0.9rem;
+        color: rgba(200,200,255,0.6);
         margin-top: 0.8rem;
+    }
+
+    .hero-divider {
+        width: 200px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent);
+        margin: 1rem auto;
     }
 
     /* ── Section Cards ── */
@@ -684,8 +727,8 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(212,175,55,0.1);
     }
 
-    /* ── Input Fields ── */
-    .stTextInput input, .stTextArea textarea, .stSelectbox select {
+    /* ── Input Fields (general) ── */
+    .stTextArea textarea, .stSelectbox select {
         background: rgba(255,255,255,0.05) !important;
         border: 1px solid rgba(212,175,55,0.3) !important;
         border-radius: 10px !important;
@@ -695,10 +738,33 @@ st.markdown("""
         transition: all 0.3s ease !important;
     }
 
-    .stTextInput input:focus, .stTextArea textarea:focus {
+    .stTextArea textarea:focus {
         border-color: #d4af37 !important;
         box-shadow: 0 0 0 2px rgba(212,175,55,0.2), 0 4px 20px rgba(212,175,55,0.1) !important;
         background: rgba(255,255,255,0.08) !important;
+    }
+
+    /* ── Student Name Input — BLACK background ── */
+    div[data-testid="stTextInput"] input {
+        background: #000000 !important;
+        border: 2px solid #d4af37 !important;
+        border-radius: 10px !important;
+        color: #ffffff !important;
+        font-family: 'Tajawal', sans-serif !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        transition: all 0.3s ease !important;
+        padding: 0.6rem 1rem !important;
+    }
+
+    div[data-testid="stTextInput"] input:focus {
+        border-color: #f0d060 !important;
+        box-shadow: 0 0 0 3px rgba(212,175,55,0.3), 0 4px 20px rgba(212,175,55,0.2) !important;
+        background: #111111 !important;
+    }
+
+    div[data-testid="stTextInput"] input::placeholder {
+        color: rgba(212,175,55,0.5) !important;
     }
 
     /* ── 3D Assess Button ── */
@@ -762,11 +828,6 @@ st.markdown("""
         box-shadow: 0 2px 8px rgba(212,175,55,0.2) !important;
     }
 
-    /* ── Slider ── */
-    .stSlider [data-baseweb="slider"] {
-        padding: 0.5rem 0 !important;
-    }
-
     /* ── Labels & Text ── */
     .stTextInput label, .stTextArea label, .stSlider label, .stFileUploader label {
         font-family: 'Tajawal', sans-serif !important;
@@ -788,30 +849,39 @@ st.markdown("""
 
     /* ── Feedback Output Box ── */
     .feedback-box {
-        background: linear-gradient(145deg, rgba(26,10,46,0.9), rgba(13,13,26,0.9));
-        border: 1px solid rgba(212,175,55,0.35);
-        border-radius: 16px;
-        padding: 2rem;
+        background: linear-gradient(145deg, rgba(26,10,46,0.95), rgba(13,13,26,0.95));
+        border: 2px solid rgba(212,175,55,0.4);
+        border-radius: 20px;
+        padding: 2.5rem;
         margin-top: 1.5rem;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(212,175,55,0.2);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(212,175,55,0.2), 0 0 40px rgba(212,175,55,0.05);
         position: relative;
     }
 
     .feedback-box::before {
         content: "❧ تقييم الطالب ❧";
         position: absolute;
-        top: -12px;
+        top: -14px;
         left: 50%;
         transform: translateX(-50%);
         background: linear-gradient(135deg, #d4af37, #b8941f);
         color: #0d0d1a;
         font-family: 'Tajawal', sans-serif;
         font-weight: 900;
-        font-size: 0.8rem;
-        padding: 2px 16px;
+        font-size: 0.85rem;
+        padding: 3px 20px;
         border-radius: 20px;
         letter-spacing: 2px;
         white-space: nowrap;
+        box-shadow: 0 4px 15px rgba(212,175,55,0.3);
+    }
+
+    /* Arabic ornament divider inside feedback */
+    .feedback-box hr {
+        border: none !important;
+        height: 1px !important;
+        background: linear-gradient(90deg, transparent, rgba(212,175,55,0.4), transparent) !important;
+        margin: 1.5rem 0 !important;
     }
 
     /* ── Info / Success / Warning boxes ── */
@@ -857,6 +927,16 @@ st.markdown("""
         background: rgba(255,255,255,0.02) !important;
     }
 
+    /* ── Arabic ornament decorations ── */
+    .ornament-divider {
+        text-align: center;
+        color: rgba(212,175,55,0.5);
+        font-size: 1.2rem;
+        letter-spacing: 8px;
+        margin: 0.5rem 0;
+        font-family: 'Scheherazade New', serif;
+    }
+
     /* Hide Streamlit branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -867,8 +947,9 @@ st.markdown("""
 st.markdown("""
 <div class="hero-banner">
     <div class="hero-arabic">مُقيِّم الكتابة العربية</div>
+    <div class="hero-divider"></div>
     <div class="hero-english">Arabic Writing Assessor</div>
-    <div class="hero-sub">✦ AI-powered feedback for non-native Arabic learners — powered by Gemini ✦</div>
+    <div class="hero-sub">✦ تقييم ذكي للكتابة العربية لمتعلمي اللغة ✦</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -963,7 +1044,7 @@ with col_right:
             writing = writing_typed
 
     with writing_tab2:
-        st.info("📸 Upload a photo of the student's handwritten Arabic. Gemini will read it automatically.")
+        st.info("📸 Upload a photo of the student's handwritten Arabic. Groq will read it automatically.")
         st.caption("📱 Supports: JPG, PNG, HEIC (iPhone), PDF, WEBP, BMP — single or multiple photos")
         writing_imgs = st.file_uploader(
             "Upload handwriting photo(s) or PDF",
@@ -1017,7 +1098,7 @@ with col_right:
 # =============================================
 if assess_btn:
     st.divider()
-    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with Gemini..."):
+    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with Groq..."):
         try:
             prompt = build_prompt(
                 name=name.strip(),
