@@ -340,11 +340,24 @@ def get_rubric_by_year(year: int) -> tuple[str, str]:
 
 
 def extract_text_from_image(uploaded_file) -> str:
-    """Extract Arabic/English text from an uploaded image using OCR."""
+    """Extract Arabic/English text from an uploaded image or PDF using OCR."""
     try:
-        img = Image.open(uploaded_file)
-        text = pytesseract.image_to_string(img, lang="eng+ara")
-        return text.strip()
+        filename = uploaded_file.name.lower()
+        if filename.endswith(".pdf") and PDF_SUPPORTED:
+            data = uploaded_file.read()
+            doc = fitz.open(stream=data, filetype="pdf")
+            all_text = []
+            for page in doc:
+                pix = page.get_pixmap(dpi=200)
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                text = pytesseract.image_to_string(img, lang="eng+ara")
+                if text.strip():
+                    all_text.append(text.strip())
+            return "\n".join(all_text)
+        else:
+            img = Image.open(uploaded_file)
+            text = pytesseract.image_to_string(img, lang="eng+ara")
+            return text.strip()
     except Exception:
         return ""
 
@@ -363,16 +376,69 @@ def get_level_note(year: int) -> str:
 
 def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_key: str, rubric: str, word_bank: str = '') -> str:
     first_name = name.strip().split()[0] if name.strip() else name
-    tip_count = 3 if year <= 4 else 5
+    tip_count = 3 if year <= 4 else 4
     level_note = get_level_note(year)
-    word_bank_section = f"""The teacher has provided a word bank of vocabulary to encourage. 
-Use these words as reference when giving vocabulary advice and suggestions:
-{word_bank}
+    word_bank_section = f"""Word bank provided: {word_bank}
+- Praise words the student used from this list
+- Suggest 2-3 unused words that fit their writing
+- Include: ### 📚 Word Bank — ✅ Used: [...] | 💡 Try next: [...]""" if word_bank.strip() else "No word bank — skip Word Bank section."
 
-When giving feedback:
-- Check if the student used any of these words — praise them if they did
-- Suggest 2-3 relevant unused words from this list that would improve their writing
-- Add a section: ### 📚 Word Bank Suggestions — showing which words to try next time""" if word_bank.strip() else "No word bank provided — skip the Word Bank Suggestions section."
+    return f"""You are a concise Arabic writing teacher. Give focused, specific feedback. No padding. No repetition.
+
+Student: {first_name} | Years of Arabic: {year} ({rubric_key} rubric) | Level: {level_note}
+LO: {lo if lo.strip() else "Not provided"}
+Success Criteria: {sc if sc.strip() else "Not provided"}
+Rubric: {rubric}
+{f"Word Bank: {word_bank_section}" if word_bank.strip() else ""}
+Student Writing: {writing}
+
+SPELLING RULE: Only flag words you are 100% certain are misspelled. Never flag correct Arabic words. When in doubt, skip it.
+
+OUTPUT — be brief and direct:
+
+### 👋 {first_name}
+One specific warm sentence about their writing.
+
+### ⭐ What Went Well
+- **Strength 1:** (tied to their writing)
+- **Strength 2:** (tied to their writing)
+
+### 🔴 Improve This
+> Quote: "exact student quote"
+> Issue: [category]
+> Fix hint: one sentence guiding them — no full answer
+
+### ✏️ Spelling
+Only real errors:
+- ❌ wrong → ✅ correct — [why]
+Or: ✅ No spelling errors found.
+
+### 📐 Grammar
+1-2 grammar points only if clearly present. Skip if none.
+
+{"### 📚 Word Bank" if word_bank.strip() else ""}
+{"- ✅ Used: [...] | 💡 Try next: [2-3 words]" if word_bank.strip() else ""}
+
+### 🟢 Top {tip_count} Tips
+Short, actionable, specific to this student:
+1.
+2.
+3.
+{"4." if tip_count == 4 else ""}
+
+### 🔵 Rubric Score
+| Category | Level | /3 |
+|---|---|---|
+| Purpose/Content | | |
+| Organization | | |
+| Vocabulary | | |
+| Sentence Structure | | |
+| Grammar/Spelling | | |
+| **TOTAL** | | **/15** |
+
+### 💪 Next Step
+"Next time, try to..." — one sentence only.
+"""
 
     return f"""
 You are a warm, supportive Arabic teacher giving personalised feedback to a non-native student.
@@ -401,57 +467,75 @@ STUDENT WRITING:
 {writing}
 
 ───────────────────────────────────────────
-OUTPUT FORMAT (follow exactly — use these headings and emojis):
+CRITICAL SPELLING RULES — READ CAREFULLY:
+- You must ONLY flag words that are genuinely misspelled in Arabic
+- Do NOT flag correct Arabic words as errors
+- Do NOT flag proper nouns, names, or numbers as errors
+- Do NOT flag words just because they are informal or colloquial
+- If you are not 100% certain a word is wrong, do NOT include it
+- Double-check every word before listing it as an error
+- It is better to miss a real error than to falsely flag a correct word
+───────────────────────────────────────────
+
+OUTPUT FORMAT (follow exactly):
 
 ### 👋 Hello, {first_name}!
-Start with one warm, personalised sentence using the student's name that references something specific and positive from their actual writing.
-Example style: "Well done, {first_name}, you did a great job using..."
+One warm sentence referencing something specific and positive from their actual writing.
 
 ---
 
-### ⭐ WWW — What Went Well:
-Give exactly TWO clear strengths. Be specific — refer directly to the student's writing.
-Use {first_name}'s name naturally at least once here.
-
-- **Strength 1:** ...
-- **Strength 2:** ...
+### ⭐ WWW — What Went Well
+- **Strength 1:** (specific to their writing)
+- **Strength 2:** (specific to their writing)
 
 ---
 
-### 🔴 EBI — Even Better If:
-Give exactly ONE main improvement point. Keep it achievable and kind.
-Do NOT list everything — pick the single most important issue.
-
-> **Quote:** "exact text from student writing"
-> **Category:** Grammar / Spelling / Vocabulary / Sentence Structure
-> **What's wrong:** (1 sentence, plain language)
-> **Hint:** Guide {first_name} toward the fix — do NOT rewrite or give the full answer
+### 🔴 EBI — Even Better If
+> **Quote:** "exact quote from student writing"
+> **Issue:** Grammar / Spelling / Vocabulary / Structure
+> **Explanation:** One clear sentence explaining the problem
+> **Hint:** Guide toward the fix without giving the full answer
 
 ---
 
-### ✏️ Spelling Corrections:
-List spelling mistakes found in the writing using this format only:
-- ❌ wrong word → ✅ correct word
+### ✏️ Spelling Corrections
+IMPORTANT: Only list words you are 100% certain are misspelled.
+Format:
+- ❌ [misspelled] → ✅ [correct] — [brief reason in English]
 
-(If no spelling errors, write: "Great job — no spelling errors found! 🎉")
-
----
-
-### 🏗️ Structure Advice:
-Give 1-2 sentences of structure advice adapted to {first_name}'s level ({year} years of study).
-Base this on the rubric expectations for this level.
+If no real errors found: "✅ No spelling errors found — great job!"
 
 ---
 
-### 🟡 Success Criteria Check:
-(Only include if Success Criteria were provided — otherwise skip this section entirely)
-- ✔ [Criterion] — briefly explain why it's met
-- ✖ [Criterion] — briefly explain why it's not yet met
+### 📐 Grammar Notes
+List 1-2 grammar issues only if clearly present:
+- [Issue]: [Brief explanation and example from their writing]
+
+If no grammar issues: skip this section.
 
 ---
 
-### 🟢 Top {tip_count} Tips to Improve:
-Actionable tips specific to {first_name}'s actual writing — no generic advice.
+### 📚 Word Bank Suggestions
+(Only if word bank was provided)
+- ✅ Used from word bank: [words they used]
+- 💡 Try next time: [2-3 specific words from the bank that fit their topic]
+
+---
+
+### 🏗️ Structure Advice
+1-2 sentences of structure advice based on rubric for {year} years of study.
+
+---
+
+### 🟡 Success Criteria Check
+(Only if Success Criteria provided — otherwise skip)
+- ✔ [Criterion met]
+- ✖ [Criterion not yet met]
+
+---
+
+### 🟢 Top {tip_count} Tips to Improve
+Specific and actionable — tied to THIS student's writing:
 1.
 2.
 3.
@@ -459,26 +543,30 @@ Actionable tips specific to {first_name}'s actual writing — no generic advice.
 
 ---
 
-### 🔵 Rubric Level:
-- **Level:** Beginning / Developing / Accomplished / Advanced / Exemplary
-- **Score estimate:** X / 15
-- **Why:** 2-3 sentences tied directly to the rubric for {rubric_key} years of study.
+### 🔵 Rubric Assessment
+| Category | Level | Score |
+|---|---|---|
+| Purpose/Content | [level] | [x]/3 |
+| Organization | [level] | [x]/3 |
+| Vocabulary | [level] | [x]/3 |
+| Sentence Structure | [level] | [x]/3 |
+| Grammar/Spelling | [level] | [x]/3 |
+| **TOTAL** | **[Overall Level]** | **[x]/15** |
+
+**Summary:** 2 sentences explaining the score based on the rubric.
 
 ---
 
-### 💪 Next Step:
-End with one clear, simple target sentence starting with:
-"Next time, try to..."
-Then close with one warm motivational line addressed to {first_name}.
+### 💪 Next Step
+"Next time, try to..." + one warm motivational closing line to {first_name}.
 
 ───────────────────────────────────────────
-STRICT RULES — NEVER BREAK THESE:
+STRICT RULES:
 - NEVER rewrite the student's full text
-- NEVER provide fully corrected sentences
-- Use {first_name}'s name naturally — not in every sentence, but enough to feel personal
-- Keep tone encouraging, honest, and simple
-- Adapt all expectations to the student's level ({year} years of study)
-- DO NOT give generic advice — tie everything to the student's actual writing
+- NEVER flag correct Arabic words as spelling errors
+- Keep tone warm, honest, and encouraging
+- Tie ALL feedback to the student's actual writing
+- Adapt ALL expectations to {year} years of study level
 """
 
 
@@ -960,122 +1048,133 @@ col_left, col_right = st.columns([1, 1], gap="large")
 
 with col_left:
     st.markdown('<div class="section-title">🌙 Student Profile</div>', unsafe_allow_html=True)
-
     name = st.text_input("Student Name", placeholder="e.g. Sara Ahmed")
-
-    year = st.slider(
-        "Years of Learning Arabic",
-        min_value=2, max_value=9, value=5,
-        help="Drag to select how many years the student has been learning Arabic"
-    )
-
+    year = st.slider("Years of Learning Arabic", min_value=2, max_value=9, value=5)
     rubric_key, rubric_text = get_rubric_by_year(year)
     if rubric_key:
-        st.markdown(f'<div class="rubric-badge">📊 Rubric applied: <strong>{rubric_key} Years of Study</strong></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="rubric-badge">📊 Rubric: <strong>{rubric_key} Years of Study</strong></div>', unsafe_allow_html=True)
     else:
         st.warning("No rubric found for this year range.")
 
     st.divider()
 
+    # ── LO ──
     st.markdown('<div class="section-title">🎯 Learning Objective (LO)</div>', unsafe_allow_html=True)
-    lo_text = st.text_area("Type the LO here", height=100, placeholder="e.g. Student can write a descriptive paragraph about their daily routine using past tense.")
-    lo_img = st.file_uploader("Or upload LO as image", type=["png", "jpg", "jpeg", "heic", "heif", "webp", "pdf"], key="lo_img")
-    if lo_img:
-        lo_extracted = extract_text_from_image(lo_img)
-        if lo_extracted:
-            st.success("✅ LO extracted from image")
-            lo_text = lo_extracted
+    lo_text = st.text_area("Type or paste LO", height=80, placeholder="e.g. Write a paragraph about daily routine using past tense.")
+    lo_file = st.file_uploader("Or upload image / PDF", type=["png","jpg","jpeg","heic","heif","webp","bmp","pdf"], key="lo_file")
+    if lo_file:
+        with st.spinner("Reading LO..."):
+            extracted = extract_text_from_image(lo_file)
+            if extracted:
+                lo_text = extracted
+                st.success("✅ LO extracted")
+                st.caption(extracted[:200])
+            else:
+                st.warning("⚠️ Could not extract text — try a clearer image.")
 
+    st.divider()
+
+    # ── SC ──
     st.markdown('<div class="section-title">✅ Success Criteria</div>', unsafe_allow_html=True)
-    sc_text = st.text_area("Type Success Criteria here", height=100, placeholder="e.g. Uses at least 3 connectives, writes 6-8 lines, uses past and present tense.")
-    sc_img = st.file_uploader("Or upload Success Criteria as image", type=["png", "jpg", "jpeg", "heic", "heif", "webp", "pdf"], key="sc_img")
-    if sc_img:
-        sc_extracted = extract_text_from_image(sc_img)
-        if sc_extracted:
-            st.success("✅ Success Criteria extracted from image")
-            sc_text = sc_extracted
+    sc_text = st.text_area("Type or paste Success Criteria", height=80, placeholder="e.g. Uses 3 connectives, 6-8 lines, past and present tense.")
+    sc_file = st.file_uploader("Or upload image / PDF", type=["png","jpg","jpeg","heic","heif","webp","bmp","pdf"], key="sc_file")
+    if sc_file:
+        with st.spinner("Reading Success Criteria..."):
+            extracted = extract_text_from_image(sc_file)
+            if extracted:
+                sc_text = extracted
+                st.success("✅ Success Criteria extracted")
+                st.caption(extracted[:200])
+            else:
+                st.warning("⚠️ Could not extract text — try a clearer image.")
 
+    st.divider()
+
+    # ── Word Bank ──
     st.markdown('<div class="section-title">📚 Word Bank <span style="font-size:0.75rem;opacity:0.6;font-weight:400">(Optional)</span></div>', unsafe_allow_html=True)
-    use_word_bank = st.toggle("Enable Word Bank / Vocabulary List", value=False, help="Add specific words you want the student to use in their writing")
+    use_word_bank = st.toggle("Enable Word Bank", value=False)
     word_bank_text = ""
     if use_word_bank:
-        st.caption("Add vocabulary words you want the student to use. The AI will check if they used them and suggest relevant ones.")
-        wb_tab1, wb_tab2 = st.tabs(["✏️ Type Words", "📄 Upload CSV"])
-        with wb_tab1:
-            word_bank_text = st.text_area(
-                "Type words (one per line or comma-separated)",
-                height=120,
-                placeholder="e.g. بالإضافة إلى ذلك، على الرغم من، في المقابل، لذلك، ومن ثم",
-                help="Type Arabic vocabulary words, phrases, connectives, or adjectives you want the student to use."
-            )
-        with wb_tab2:
-            wb_csv = st.file_uploader("Upload a CSV file with words", type=["csv", "txt"], key="wb_csv")
-            if wb_csv:
+        word_bank_text = st.text_area(
+            "Type or paste words (one per line or comma-separated)",
+            height=100,
+            placeholder="e.g. بالإضافة إلى ذلك، على الرغم من، لذلك، ومن ثم"
+        )
+        wb_file = st.file_uploader(
+            "Or upload image / PDF / CSV / TXT",
+            type=["png","jpg","jpeg","heic","heif","webp","bmp","pdf","csv","txt"],
+            key="wb_file"
+        )
+        if wb_file:
+            fname = wb_file.name.lower()
+            if fname.endswith((".csv", ".txt")):
                 try:
                     import pandas as pd
                     from io import StringIO
-                    wb_content = wb_csv.read().decode("utf-8")
-                    # Try reading as CSV first, fallback to plain text
+                    content = wb_file.read().decode("utf-8")
                     try:
-                        wb_df = pd.read_csv(StringIO(wb_content))
+                        wb_df = pd.read_csv(StringIO(content))
                         word_bank_text = "\n".join(wb_df.iloc[:, 0].dropna().astype(str).tolist())
                     except Exception:
-                        word_bank_text = wb_content
-                    st.success(f"✅ Loaded {len(word_bank_text.splitlines())} words from file")
-                    st.text_area("Preview:", value=word_bank_text, height=100, disabled=True)
+                        word_bank_text = content
+                    st.success(f"✅ Loaded word bank from file")
                 except Exception as e:
-                    st.error(f"❌ Could not read file: {str(e)}")
+                    st.error(f"❌ {str(e)}")
+            else:
+                with st.spinner("Reading word bank..."):
+                    extracted = extract_text_from_image(wb_file)
+                    if extracted:
+                        word_bank_text = extracted
+                        st.success("✅ Word bank extracted from image/PDF")
+                        st.caption(extracted[:200])
+                    else:
+                        st.warning("⚠️ Could not extract — try a clearer image.")
 
 with col_right:
     st.markdown('<div class="section-title">✍️ Student Writing</div>', unsafe_allow_html=True)
 
-    writing_tab1, writing_tab2 = st.tabs(["⌨️ Type / Paste Text", "📷 Upload Handwritten Photo"])
-
+    writing_tab1, writing_tab2 = st.tabs(["⌨️ Type / Paste", "📷 Upload Photo / PDF"])
     writing = ""
 
     with writing_tab1:
         writing_typed = st.text_area(
-            "Paste or type the student's Arabic writing here",
-            height=260,
+            "Paste or type student's Arabic writing",
+            height=280,
             placeholder="اكتب هنا...",
-            help="You can paste Arabic text directly into this box."
         )
         if writing_typed.strip():
             writing = writing_typed
 
     with writing_tab2:
-        st.info("📸 Upload a photo of the student's handwritten Arabic. Groq will read it automatically.")
-        st.caption("📱 Supports: JPG, PNG, HEIC (iPhone), PDF, WEBP, BMP — single or multiple photos")
+        st.caption("📱 Supports: JPG, PNG, HEIC, WEBP, BMP, PDF — single or multiple files")
         writing_imgs = st.file_uploader(
             "Upload handwriting photo(s) or PDF",
-            type=["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp", "pdf"],
+            type=["png","jpg","jpeg","heic","heif","webp","bmp","pdf"],
             key="writing_img",
             accept_multiple_files=True
         )
         if writing_imgs:
             all_extracted = []
-            for i, writing_img in enumerate(writing_imgs):
-                st.image(writing_img, caption=f"📄 Page {i+1}: {writing_img.name}", use_column_width=True)
+            for i, f in enumerate(writing_imgs):
+                st.image(f, caption=f"Page {i+1}: {f.name}", use_column_width=True)
             with st.spinner(f"🔍 Reading {len(writing_imgs)} file(s)..."):
-                for i, writing_img in enumerate(writing_imgs):
+                for i, f in enumerate(writing_imgs):
                     try:
-                        extracted = extract_arabic_from_image_gemini(writing_img)
+                        extracted = extract_arabic_from_image_gemini(f)
                         if extracted:
                             all_extracted.append(extracted)
-                            st.success(f"✅ File {i+1} extracted successfully!")
+                            st.success(f"✅ File {i+1} read successfully")
                         else:
-                            st.warning(f"⚠️ Could not extract text from file {i+1}. Try a clearer photo.")
+                            st.warning(f"⚠️ File {i+1}: no text found — try a clearer photo.")
                     except Exception as e:
-                        st.error(f"❌ Could not read file {i+1}: {str(e)}")
+                        st.error(f"❌ File {i+1}: {str(e)}")
             if all_extracted:
-                extracted_writing = "\n".join(all_extracted)
-                st.markdown("**📝 Extracted text:**")
-                st.markdown(f"> {extracted_writing}")
-                writing = extracted_writing
+                writing = "\n".join(all_extracted)
+                st.markdown("**📝 Extracted:**")
+                st.caption(writing[:300])
 
     if writing.strip():
-        word_count = len(writing.split())
-        st.caption(f"Word count: ~{word_count} words")
+        st.caption(f"Word count: ~{len(writing.split())} words")
 
     st.divider()
 
@@ -1112,7 +1211,142 @@ if assess_btn:
             )
             result = assess_with_gemini(prompt)
 
-            st.markdown('<div class="feedback-box">', unsafe_allow_html=True)
+            # ── Styled Report Display ──
+            st.markdown("""
+<style>
+/* Report container */
+.report-container {
+    background: linear-gradient(145deg, #0f0f1f, #1a0a2e);
+    border: 2px solid rgba(212,175,55,0.5);
+    border-radius: 24px;
+    padding: 2.5rem 3rem;
+    margin-top: 1.5rem;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(212,175,55,0.05);
+}
+
+.report-container::before {
+    content: "❧ تقييم الطالب ❧";
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #d4af37, #b8941f);
+    color: #0d0d1a;
+    font-family: 'Tajawal', sans-serif;
+    font-weight: 900;
+    font-size: 0.9rem;
+    padding: 4px 24px;
+    border-radius: 20px;
+    letter-spacing: 3px;
+    white-space: nowrap;
+    box-shadow: 0 4px 15px rgba(212,175,55,0.4);
+}
+
+/* Section headings h3 */
+.report-container h3 {
+    font-family: 'Tajawal', sans-serif !important;
+    font-size: 1.15rem !important;
+    font-weight: 900 !important;
+    color: #ffffff !important;
+    background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05));
+    border-left: 4px solid #d4af37;
+    border-radius: 8px;
+    padding: 0.6rem 1rem !important;
+    margin-top: 1.8rem !important;
+    margin-bottom: 0.8rem !important;
+    letter-spacing: 0.5px;
+}
+
+/* Paragraph text */
+.report-container p {
+    font-family: 'Tajawal', sans-serif !important;
+    font-size: 1rem !important;
+    color: rgba(230,220,210,0.95) !important;
+    line-height: 1.8 !important;
+    margin-bottom: 0.6rem !important;
+}
+
+/* List items */
+.report-container li {
+    font-family: 'Tajawal', sans-serif !important;
+    font-size: 1rem !important;
+    color: rgba(230,220,210,0.9) !important;
+    line-height: 1.8 !important;
+    margin-bottom: 0.4rem !important;
+    padding-left: 0.3rem;
+}
+
+/* Bold text */
+.report-container strong {
+    color: #d4af37 !important;
+    font-weight: 700 !important;
+}
+
+/* Blockquote (EBI quote) */
+.report-container blockquote {
+    background: rgba(212,175,55,0.08) !important;
+    border-left: 4px solid #d4af37 !important;
+    border-radius: 8px !important;
+    padding: 1rem 1.2rem !important;
+    margin: 0.8rem 0 !important;
+    color: rgba(240,230,220,0.9) !important;
+    font-style: normal !important;
+}
+
+/* Table (rubric assessment) */
+.report-container table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 1rem 0 !important;
+    font-family: 'Tajawal', sans-serif !important;
+}
+
+.report-container th {
+    background: rgba(212,175,55,0.2) !important;
+    color: #d4af37 !important;
+    font-weight: 700 !important;
+    padding: 0.6rem 1rem !important;
+    border: 1px solid rgba(212,175,55,0.3) !important;
+    font-size: 0.95rem !important;
+}
+
+.report-container td {
+    padding: 0.5rem 1rem !important;
+    border: 1px solid rgba(212,175,55,0.15) !important;
+    color: rgba(230,220,210,0.9) !important;
+    font-size: 0.95rem !important;
+}
+
+.report-container tr:last-child td {
+    background: rgba(212,175,55,0.1) !important;
+    color: #d4af37 !important;
+    font-weight: 700 !important;
+}
+
+.report-container tr:nth-child(even) td {
+    background: rgba(255,255,255,0.03) !important;
+}
+
+/* Horizontal rule */
+.report-container hr {
+    border: none !important;
+    height: 1px !important;
+    background: linear-gradient(90deg, transparent, rgba(212,175,55,0.4), transparent) !important;
+    margin: 1.2rem 0 !important;
+}
+
+/* Code inline */
+.report-container code {
+    background: rgba(212,175,55,0.1) !important;
+    color: #d4af37 !important;
+    border-radius: 4px !important;
+    padding: 2px 6px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+            st.markdown('<div class="report-container">', unsafe_allow_html=True)
             st.markdown(result)
             st.markdown('</div>', unsafe_allow_html=True)
 
