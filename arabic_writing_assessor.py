@@ -383,12 +383,48 @@ def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_ke
 - Suggest 2-3 unused words that fit their writing
 - Include: ### 📚 Word Bank — ✅ Used: [...] | 💡 Try next: [...]""" if word_bank.strip() else "No word bank — skip Word Bank section."
 
+    common_mistakes_guide = """
+COMMON MISTAKES FOR NON-NATIVE ARABIC LEARNERS (predict and address these):
+
+ADJECTIVE PLACEMENT:
+- Wrong: "كتاب أحمر" should be checked if correct — actually this IS correct
+- Watch for: adjectives BEFORE nouns when they should be after
+- Example error: "أحمر كتاب" (red book) instead of "كتاب أحمر"
+- Hint in feedback: remind student adjectives come AFTER nouns in Arabic
+
+MASCULINE/FEMININE AGREEMENT:
+- Adjectives must agree with nouns: "كتاب أحمر" (masc) vs "سيارة حمراء" (fem)
+- Verb subjects must agree: "هو يكتب" (he writes) vs "هي تكتب" (she writes)
+- Common error: using masculine form with feminine subject or vice versa
+- Watch for: mismatched adjective/noun endings or verb/subject agreement
+
+VERB CONJUGATION & SUBJECT AGREEMENT:
+- Present tense: يكتب (he), تكتب (she/you), أكتب (I), نكتب (we)
+- Past tense: كتب (he), كتبت (she), كتبت (I), كتبنا (we)
+- Common errors: wrong pronoun suffixes, wrong tense markers, non-agreement with subject
+- Watch for: sentences where verb doesn't match the subject's person/number/gender
+
+PRONOUN SUFFIXES:
+- Object pronouns attach to verbs/prepositions: "رأيته" (I saw him), "في المنزل" (in the house)
+- Common error: forgetting or misplacing the suffix
+
+PREPOSITIONS & CASE ENDINGS:
+- "في" (in), "من" (from), "إلى" (to) affect noun endings
+- Genitive case after prepositions: "في البيت" not "في البيتْ"
+- Watch for: wrong case endings after prepositions
+
+If you spot ANY of these patterns, mention them specifically in the "Improve This" section.
+"""
+
     return f"""You are a concise Arabic writing teacher. Give focused, specific feedback. No padding. No repetition.
 
 Student: {first_name} | Years of Arabic: {year} ({rubric_key} rubric) | Level: {level_note}
 LO: {lo if lo.strip() else "Not provided"}
 Success Criteria: {sc if sc.strip() else "Not provided"}
 Rubric: {rubric}
+
+{common_mistakes_guide}
+
 {f"Word Bank: {word_bank_section}" if word_bank.strip() else ""}
 Student Writing: {writing}
 
@@ -405,16 +441,19 @@ One specific warm sentence about their writing.
 
 ### 🔴 Improve This
 > Quote: "exact student quote"
-> Issue: [category]
+> Issue: Grammar / Spelling / Vocabulary / Structure / Adjective Placement / Masculine-Feminine Agreement / Verb Conjugation
 > Fix hint: one sentence guiding them — no full answer
+> Predict: If you see patterns of a common mistake type (adjective order, gender agreement, verb conjugation), mention it here.
 
 ### ✏️ Spelling
 Only real errors:
 - ❌ wrong → ✅ correct — [why]
 Or: ✅ No spelling errors found.
 
-### 📐 Grammar
-1-2 grammar points only if clearly present. Skip if none.
+### 📐 Grammar & Common Mistakes
+1-2 issues only if clearly present:
+- [Issue]: [specific to this student's writing]
+(Examples: adjective placement, masculine/feminine mismatch, verb not matching subject, preposition + case ending)
 
 {"### 📚 Word Bank" if word_bank.strip() else ""}
 {"- ✅ Used: [...] | 💡 Try next: [2-3 words]" if word_bank.strip() else ""}
@@ -641,6 +680,88 @@ Return ONLY the Arabic text, nothing else."""
         all_text.append(response.choices[0].message.content.strip())
 
     return "\n".join(all_text)
+
+
+def share_to_teams(student_name: str, report: str, teams_webhook: str) -> bool:
+    """Send report to Microsoft Teams via webhook."""
+    try:
+        import requests
+        message = {
+            "@type": "MessageCard",
+            "@context": "https://schema.org/extensions",
+            "summary": f"Arabic Writing Assessment - {student_name}",
+            "themeColor": "d4af37",
+            "title": f"📝 Writing Assessment for {student_name}",
+            "sections": [
+                {
+                    "activityTitle": f"مُقيِّم الكتابة العربية",
+                    "activitySubtitle": f"Student: {student_name}",
+                    "text": report[:3000]  # Teams has char limit
+                }
+            ]
+        }
+        response = requests.post(teams_webhook, json=message, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        st.error(f"❌ Teams error: {str(e)}")
+        return False
+
+
+def share_to_email(student_name: str, teacher_email: str, student_email: str, report: str) -> bool:
+    """Send report via email using SMTP."""
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        import pandas as pd
+        
+        # Get SMTP config from secrets
+        smtp_server = st.secrets.get("SMTP_SERVER", "")
+        smtp_port = st.secrets.get("SMTP_PORT", 587)
+        sender_email = st.secrets.get("SENDER_EMAIL", "")
+        sender_password = st.secrets.get("SENDER_PASSWORD", "")
+        
+        if not all([smtp_server, sender_email, sender_password]):
+            st.error("❌ Email configuration not set in secrets.")
+            return False
+        
+        # Create email
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"🌙 Arabic Writing Assessment - {student_name}"
+        msg["From"] = sender_email
+        msg["To"] = teacher_email
+        if student_email:
+            msg["Cc"] = student_email
+        
+        html = f"""
+        <html>
+          <body style="font-family: Tajawal, Arial; direction: rtl; color: #333;">
+            <h2 style="color: #d4af37;">مُقيِّم الكتابة العربية</h2>
+            <h3>Writing Assessment Report for {student_name}</h3>
+            <pre style="white-space: pre-wrap; word-wrap: break-word; background: #f5f5f5; padding: 1rem; border-radius: 8px;">
+{report}
+            </pre>
+            <p style="margin-top: 2rem; border-top: 1px solid #ddd; padding-top: 1rem; font-size: 0.9rem; color: #666;">
+              Sent from Arabic Writing Assessor
+            </p>
+          </body>
+        </html>
+        """
+        msg.attach(MIMEText(html, "html"))
+        
+        # Send email
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            recipients = [teacher_email]
+            if student_email:
+                recipients.append(student_email)
+            server.sendmail(sender_email, recipients, msg.as_string())
+        
+        return True
+    except Exception as e:
+        st.error(f"❌ Email error: {str(e)}")
+        return False
 
 
 def assess_with_gemini(prompt: str) -> str:
@@ -1351,12 +1472,48 @@ if assess_btn:
             st.markdown('</div>', unsafe_allow_html=True)
 
             st.divider()
-            st.download_button(
-                label="⬇️ Download Feedback as .txt",
-                data=result,
-                file_name=f"feedback_{name.strip().replace(' ', '_')}.txt",
-                mime="text/plain"
-            )
+
+            # ── Sharing Section ──
+            st.markdown('<div class="section-title">📤 Share Report</div>', unsafe_allow_html=True)
+            
+            share_col1, share_col2, share_col3 = st.columns([1, 1, 1])
+
+            with share_col1:
+                st.download_button(
+                    label="⬇️ Download as .txt",
+                    data=result,
+                    file_name=f"feedback_{name.strip().replace(' ', '_')}.txt",
+                    mime="text/plain"
+                )
+
+            with share_col2:
+                if st.button("💬 Share to Teams", use_container_width=True):
+                    teams_webhook = st.secrets.get("TEAMS_WEBHOOK", "")
+                    if teams_webhook:
+                        with st.spinner("Sending to Teams..."):
+                            if share_to_teams(name.strip(), result, teams_webhook):
+                                st.success("✅ Report sent to Teams!")
+                            else:
+                                st.error("❌ Failed to send to Teams.")
+                    else:
+                        st.info("⚠️ Teams webhook not configured. Add TEAMS_WEBHOOK to secrets.")
+
+            with share_col3:
+                if st.button("📧 Share via Email", use_container_width=True):
+                    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+                    teacher_email = st.text_input("Your email address", placeholder="teacher@example.com")
+                    student_email = st.text_input("Student email (optional)", placeholder="student@example.com")
+                    
+                    if st.button("Send Email", use_container_width=True):
+                        if teacher_email:
+                            with st.spinner("Sending email..."):
+                                if share_to_email(name.strip(), teacher_email, student_email, result):
+                                    st.success("✅ Report sent via email!")
+                                else:
+                                    st.error("❌ Failed to send email. Check configuration.")
+                        else:
+                            st.warning("⚠️ Please enter your email address.")
+                    st.markdown('</div>', unsafe_allow_html=True)
 
         except ValueError as e:
             st.error(f"❌ API Key error: {str(e)}")
