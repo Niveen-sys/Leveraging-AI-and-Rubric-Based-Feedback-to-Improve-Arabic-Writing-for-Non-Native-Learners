@@ -1,5 +1,6 @@
 streamlit>=1.28.0
 groq>=0.4.0
+google-generativeai>=0.3.0
 pytesseract>=0.3.10
 pymupdf>=1.23.0
 pillow-heif>=0.1.0
