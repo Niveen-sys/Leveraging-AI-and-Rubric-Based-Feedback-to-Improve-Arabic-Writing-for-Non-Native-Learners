@@ -105,7 +105,7 @@ def extract_text_from_image(uploaded_file) -> str:
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 
                 # Send to Gemini Vision
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                model = genai.GenerativeModel("gemini-pro-vision")
                 response = model.generate_content([
                     "Extract ALL Arabic and English text from this image. Do NOT correct or modify anything. Return ONLY the text.",
                     img
@@ -119,7 +119,7 @@ def extract_text_from_image(uploaded_file) -> str:
                 img = img.convert("RGB")
             
             # Send to Gemini Vision
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-pro-vision")
             response = model.generate_content([
                 "Extract ALL Arabic and English text from this image. Do NOT correct or modify anything. Return ONLY the text.",
                 img
