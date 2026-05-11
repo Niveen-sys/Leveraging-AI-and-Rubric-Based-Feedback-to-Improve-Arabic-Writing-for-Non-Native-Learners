@@ -541,7 +541,7 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
     api_key = get_google_api_key()
     genai.configure(api_key=api_key)
 
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
+    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]
     prompt = """This image contains handwritten Arabic text written by a student.
 Please transcribe ALL the Arabic text exactly as written — including any spelling mistakes.
 Do NOT correct errors. Do NOT add punctuation that is not there.
