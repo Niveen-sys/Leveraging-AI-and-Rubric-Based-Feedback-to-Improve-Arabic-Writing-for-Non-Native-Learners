@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+from groq import Groq
 import os
 from PIL import Image
 import pytesseract
@@ -480,12 +481,34 @@ STRICT RULES — NEVER BREAK THESE:
 """
 
 
-def get_api_key() -> str:
-    """Retrieve Gemini API key from secrets or environment."""
-    api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY not found in secrets or environment.")
-    return api_key
+def get_google_api_key() -> str:
+    """Retrieve Google API key for Vision/OCR."""
+    key = (
+        os.environ.get("GOOGLE_API_KEY")
+        or st.session_state.get("google_api_key", "").strip()
+    )
+    try:
+        key = key or st.secrets.get("GOOGLE_API_KEY", "")
+    except Exception:
+        pass
+    if not key:
+        raise ValueError("GOOGLE_API_KEY not found. Please enter it in the sidebar.")
+    return key
+
+
+def get_groq_api_key() -> str:
+    """Retrieve Groq API key for text assessment."""
+    key = (
+        os.environ.get("GROQ_API_KEY")
+        or st.session_state.get("groq_api_key", "").strip()
+    )
+    try:
+        key = key or st.secrets.get("GROQ_API_KEY", "")
+    except Exception:
+        pass
+    if not key:
+        raise ValueError("GROQ_API_KEY not found. Please enter it in the sidebar.")
+    return key
 
 
 def convert_to_pil_image(uploaded_file) -> list:
@@ -514,11 +537,10 @@ def convert_to_pil_image(uploaded_file) -> list:
 
 
 def extract_arabic_from_image_gemini(uploaded_file) -> str:
-    """Use Gemini Vision to extract Arabic handwriting from any uploaded file."""
-    api_key = get_api_key()
+    """Use Google Gemini Vision to extract Arabic handwriting from any uploaded file."""
+    api_key = get_google_api_key()
     genai.configure(api_key=api_key)
 
-    # Try models in order of preference
     models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
     prompt = """This image contains handwritten Arabic text written by a student.
 Please transcribe ALL the Arabic text exactly as written — including any spelling mistakes.
@@ -544,16 +566,20 @@ Return ONLY the Arabic text, nothing else."""
 
 
 def assess_with_gemini(prompt: str) -> str:
-    """Call Gemini API and return the assessment text."""
-    api_key = get_api_key()
-    genai.configure(api_key=api_key)
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
+    """Call Groq API and return the assessment text."""
+    api_key = get_groq_api_key()
+    client = Groq(api_key=api_key)
+    models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "mixtral-8x7b-32768"]
     last_error = None
     for model_name in models_to_try:
         try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-            return response.text
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000,
+                temperature=0.7,
+            )
+            return response.choices[0].message.content
         except Exception as e:
             last_error = e
             continue
@@ -569,6 +595,52 @@ st.set_page_config(
     page_icon="🌙",
     layout="wide"
 )
+
+# --- API Key Setup (sidebar) ---
+def _env_has(key):
+    if os.environ.get(key):
+        return True
+    try:
+        return bool(st.secrets.get(key))
+    except Exception:
+        return False
+
+with st.sidebar:
+    st.markdown("### 🔑 API Keys")
+
+    # Google API Key (for OCR / Vision)
+    if not _env_has("GOOGLE_API_KEY"):
+        _google_key = st.text_input(
+            "Google API Key (for image OCR)",
+            type="password",
+            value=st.session_state.get("google_api_key", ""),
+            placeholder="AIza...",
+            help="Used for reading handwritten Arabic images via Gemini Vision",
+        )
+        if _google_key:
+            st.session_state["google_api_key"] = _google_key
+            st.success("✅ Google key saved")
+        else:
+            st.warning("⚠️ Google API key required for image upload")
+    else:
+        st.success("✅ Google API key loaded")
+
+    # Groq API Key (for text assessment)
+    if not _env_has("GROQ_API_KEY"):
+        _groq_key = st.text_input(
+            "Groq API Key (for assessment)",
+            type="password",
+            value=st.session_state.get("groq_api_key", ""),
+            placeholder="gsk_...",
+            help="Used for generating student feedback via Groq LLM",
+        )
+        if _groq_key:
+            st.session_state["groq_api_key"] = _groq_key
+            st.success("✅ Groq key saved")
+        else:
+            st.warning("⚠️ Groq API key required for assessment")
+    else:
+        st.success("✅ Groq API key loaded")
 
 # --- Rich Arabic-Inspired CSS ---
 st.markdown("""
