@@ -1,5 +1,4 @@
 import streamlit as st
-import google.generativeai as genai
 from groq import Groq
 import os
 from PIL import Image
@@ -482,17 +481,8 @@ STRICT RULES — NEVER BREAK THESE:
 
 
 # ── API Keys ──────────────────────────────────────────────────────────────────
-GOOGLE_API_KEY = "AIzaSyDummyReplaceWithYourRealKey"   # ← replace if needed
-GROQ_API_KEY   = "gsk_DummyReplaceWithYourRealKey"     # ← replace if needed
+GROQ_API_KEY = "gsk_DummyReplaceWithYourRealKey"  # ← paste your Groq key here
 # ──────────────────────────────────────────────────────────────────────────────
-
-def get_google_api_key() -> str:
-    """Return Google API key (hardcoded, then env/secrets as fallback)."""
-    return (
-        GOOGLE_API_KEY
-        or os.environ.get("GOOGLE_API_KEY", "")
-        or _secret("GOOGLE_API_KEY")
-    )
 
 def get_groq_api_key() -> str:
     """Return Groq API key (hardcoded, then env/secrets as fallback)."""
@@ -534,33 +524,65 @@ def convert_to_pil_image(uploaded_file) -> list:
     return images
 
 
-def extract_arabic_from_image_gemini(uploaded_file) -> str:
-    """Use Google Gemini Vision to extract Arabic handwriting from any uploaded file."""
-    api_key = get_google_api_key()
-    genai.configure(api_key=api_key)
+def pil_image_to_base64(img) -> str:
+    """Convert a PIL Image to a base64-encoded JPEG string."""
+    buffer = io.BytesIO()
+    img.convert("RGB").save(buffer, format="JPEG", quality=90)
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
-    prompt = """This image contains handwritten Arabic text written by a student.
-Please transcribe ALL the Arabic text exactly as written — including any spelling mistakes.
-Do NOT correct errors. Do NOT add punctuation that is not there.
-Return ONLY the Arabic text, nothing else."""
+
+def extract_arabic_from_image_gemini(uploaded_file) -> str:
+    """Use Groq Vision to extract Arabic handwriting from any uploaded file."""
+    api_key = get_groq_api_key()
+    client = Groq(api_key=api_key)
+
+    prompt = (
+        "This image contains handwritten Arabic text written by a student. "
+        "Transcribe ALL the Arabic text exactly as written, including any spelling mistakes. "
+        "Do NOT correct errors. Do NOT add punctuation that is not there. "
+        "Return ONLY the Arabic text, nothing else."
+    )
+
+    # Vision-capable models on Groq (in preference order)
+    vision_models = [
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "meta-llama/llama-4-maverick-17b-128e-instruct",
+    ]
 
     images = convert_to_pil_image(uploaded_file)
+    all_text = []
     last_error = None
 
-    for model_name in models_to_try:
-        try:
-            model = genai.GenerativeModel(model_name)
-            all_text = []
-            for img in images:
-                response = model.generate_content([img, prompt])
-                all_text.append(response.text.strip())
-            return "\n".join(all_text)
-        except Exception as e:
-            last_error = e
-            continue
+    for img in images:
+        img_b64 = pil_image_to_base64(img)
+        page_text = None
+        for model_name in vision_models:
+            try:
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    }],
+                    max_tokens=1500,
+                )
+                page_text = response.choices[0].message.content.strip()
+                break
+            except Exception as e:
+                last_error = e
+                continue
+        if page_text:
+            all_text.append(page_text)
+        else:
+            raise RuntimeError(f"All OCR models failed for this page. Last error: {last_error}")
 
-    raise RuntimeError(f"All OCR models failed. Last error: {last_error}")
+    return "\n".join(all_text)
 
 
 def assess_with_gemini(prompt: str) -> str:
@@ -1214,7 +1236,7 @@ with col_right:
             writing = writing_typed
 
     with writing_tab2:
-        st.info("📸 Upload a photo of the student's handwritten Arabic. Gemini will read it automatically.")
+        st.info("📸 Upload a photo of the student's handwritten Arabic. AI will read it automatically.")
         st.caption("📱 Supports: JPG, PNG, HEIC (iPhone), PDF, WEBP, BMP — single or multiple photos")
         writing_imgs = st.file_uploader(
             "Upload handwriting photo(s) or PDF",
@@ -1268,7 +1290,7 @@ with col_right:
 # =============================================
 if assess_btn:
     st.divider()
-    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with Gemini..."):
+    with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing with AI..."):
         try:
             prompt = build_prompt(
                 name=name.strip(),
