@@ -1,6 +1,10 @@
 import streamlit as st
+import google.generativeai as genai
 from groq import Groq
 import os
+import hashlib
+import time
+from datetime import datetime, date
 from PIL import Image
 import pytesseract
 
@@ -481,8 +485,17 @@ STRICT RULES — NEVER BREAK THESE:
 
 
 # ── API Keys ──────────────────────────────────────────────────────────────────
-GROQ_API_KEY = "gsk_DummyReplaceWithYourRealKey"  # ← paste your Groq key here
+GROQ_API_KEY   = "gsk_DummyReplaceWithYourRealKey"   # ← Groq key (assessment)
+GOOGLE_API_KEY = "AIzaDummyReplaceWithYourRealKey"   # ← Google key (OCR only)
 # ──────────────────────────────────────────────────────────────────────────────
+
+def get_google_api_key() -> str:
+    """Return Google API key for OCR — secrets → env → hardcoded."""
+    return (
+        _secret("GOOGLE_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY", "")
+        or GOOGLE_API_KEY
+    )
 
 def get_groq_api_key() -> str:
     """Return Groq API key (hardcoded, then env/secrets as fallback)."""
@@ -497,6 +510,82 @@ def _secret(key: str) -> str:
         return st.secrets.get(key, "")
     except Exception:
         return ""
+
+
+# ══════════════════════════════════════════════════════════════
+# CACHE & RATE LIMITER
+# ══════════════════════════════════════════════════════════════
+
+# Daily usage limits (well below free tier maximums)
+MAX_OCR_PER_DAY    = 1500  # Google Gemini 2.0 Flash free tier max/day
+MAX_ASSESS_PER_DAY = 1500  # Google Gemini 2.0 Flash free tier max/day
+RATE_LIMIT_WINDOW  = 60    # seconds
+MAX_CALLS_PER_MIN  = 14    # Google allows 15/min — 1 below for safety
+
+
+def _get_usage() -> dict:
+    """Get today's usage counters from session state."""
+    today = str(date.today())
+    if "usage" not in st.session_state or st.session_state["usage"].get("date") != today:
+        st.session_state["usage"] = {"date": today, "ocr": 0, "assess": 0}
+    return st.session_state["usage"]
+
+
+def _increment_usage(kind: str):
+    """Increment usage counter (kind = 'ocr' or 'assess')."""
+    usage = _get_usage()
+    usage[kind] = usage.get(kind, 0) + 1
+
+
+def _check_limit(kind: str):
+    """Raise error if daily limit exceeded."""
+    usage = _get_usage()
+    limit = MAX_OCR_PER_DAY if kind == "ocr" else MAX_ASSESS_PER_DAY
+    count = usage.get(kind, 0)
+    if count >= limit:
+        raise RuntimeError(
+            f"⛔ Daily limit reached ({count}/{limit}). Resets tomorrow at midnight."
+        )
+
+
+def _rate_limit():
+    """Enforce rate limiting across all API calls."""
+    if "rate_calls" not in st.session_state:
+        st.session_state["rate_calls"] = []
+    now = time.time()
+    # Keep only calls within the last window
+    st.session_state["rate_calls"] = [
+        t for t in st.session_state["rate_calls"]
+        if now - t < RATE_LIMIT_WINDOW
+    ]
+    if len(st.session_state["rate_calls"]) >= MAX_CALLS_PER_MIN:
+        wait = RATE_LIMIT_WINDOW - (now - st.session_state["rate_calls"][0])
+        raise RuntimeError(
+            f"⏳ Too many requests. Please wait {int(wait)+1} seconds and try again."
+        )
+    st.session_state["rate_calls"].append(now)
+
+
+def _image_hash(uploaded_file) -> str:
+    """Generate a stable hash for an uploaded file (for caching)."""
+    uploaded_file.seek(0)
+    data = uploaded_file.read()
+    uploaded_file.seek(0)
+    return hashlib.md5(data).hexdigest()
+
+
+def _get_ocr_cache() -> dict:
+    """Return the OCR cache dict from session state."""
+    if "ocr_cache" not in st.session_state:
+        st.session_state["ocr_cache"] = {}
+    return st.session_state["ocr_cache"]
+
+
+def _get_assess_cache() -> dict:
+    """Return the assessment cache dict from session state."""
+    if "assess_cache" not in st.session_state:
+        st.session_state["assess_cache"] = {}
+    return st.session_state["assess_cache"]
 
 
 def convert_to_pil_image(uploaded_file) -> list:
@@ -532,9 +621,19 @@ def pil_image_to_base64(img) -> str:
 
 
 def extract_arabic_from_image_gemini(uploaded_file) -> str:
-    """Use Groq Vision to extract Arabic handwriting from any uploaded file."""
-    api_key = get_groq_api_key()
-    client = Groq(api_key=api_key)
+    """Use Google Gemini Vision for Arabic OCR — with cache & rate limiting."""
+    # Check cache first
+    file_hash = _image_hash(uploaded_file)
+    cache = _get_ocr_cache()
+    if file_hash in cache:
+        return cache[file_hash]  # ✅ Cache hit — no API call needed
+
+    # Check daily limit & rate limit
+    _check_limit("ocr")
+    _rate_limit()
+
+    api_key = get_google_api_key()
+    genai.configure(api_key=api_key)
 
     prompt = (
         "This image contains handwritten Arabic text written by a student. "
@@ -543,50 +642,40 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
         "Return ONLY the Arabic text, nothing else."
     )
 
-    # Vision-capable models on Groq (in preference order)
-    vision_models = [
-        "meta-llama/llama-4-scout-17b-16e-instruct",
-        "meta-llama/llama-4-maverick-17b-128e-instruct",
-    ]
-
+    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
     images = convert_to_pil_image(uploaded_file)
-    all_text = []
     last_error = None
 
-    for img in images:
-        img_b64 = pil_image_to_base64(img)
-        page_text = None
-        for model_name in vision_models:
-            try:
-                response = client.chat.completions.create(
-                    model=model_name,
-                    messages=[{
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
-                            },
-                            {"type": "text", "text": prompt},
-                        ],
-                    }],
-                    max_tokens=1500,
-                )
-                page_text = response.choices[0].message.content.strip()
-                break
-            except Exception as e:
-                last_error = e
-                continue
-        if page_text:
-            all_text.append(page_text)
-        else:
-            raise RuntimeError(f"All OCR models failed for this page. Last error: {last_error}")
+    for model_name in models_to_try:
+        try:
+            model = genai.GenerativeModel(model_name)
+            all_text = []
+            for img in images:
+                response = model.generate_content([img, prompt])
+                all_text.append(response.text.strip())
+            result = "\n".join(all_text)
+            cache[file_hash] = result   # 💾 Save to cache
+            _increment_usage("ocr")     # 📊 Count usage
+            return result
+        except Exception as e:
+            last_error = e
+            continue
 
-    return "\n".join(all_text)
+    raise RuntimeError(f"All OCR models failed. Last error: {last_error}")
 
 
 def assess_with_gemini(prompt: str) -> str:
-    """Call Groq API and return the assessment text."""
+    """Call Groq API — with cache & rate limiting."""
+    # Check cache
+    prompt_hash = hashlib.md5(prompt.encode()).hexdigest()
+    cache = _get_assess_cache()
+    if prompt_hash in cache:
+        return cache[prompt_hash]  # ✅ Cache hit
+
+    # Check limits
+    _check_limit("assess")
+    _rate_limit()
+
     api_key = get_groq_api_key()
     client = Groq(api_key=api_key)
     models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "mixtral-8x7b-32768"]
@@ -599,11 +688,20 @@ def assess_with_gemini(prompt: str) -> str:
                 max_tokens=2000,
                 temperature=0.7,
             )
-            return response.choices[0].message.content
+            result = response.choices[0].message.content
+            _cache_assess_result(prompt, result)  # 💾 Cache it
+            return result
         except Exception as e:
             last_error = e
             continue
     raise RuntimeError(f"All assessment models failed. Last error: {last_error}")
+
+
+def _cache_assess_result(prompt: str, result: str):
+    """Save assessment result to cache."""
+    prompt_hash = hashlib.md5(prompt.encode()).hexdigest()
+    _get_assess_cache()[prompt_hash] = result
+    _increment_usage("assess")
 
 
 # =============================================
@@ -615,6 +713,45 @@ st.set_page_config(
     page_icon="🌙",
     layout="wide"
 )
+
+# ── Sidebar Usage Dashboard ──
+with st.sidebar:
+    st.markdown("### 📊 Daily Usage")
+    usage = _get_usage()
+
+    ocr_count   = usage.get("ocr", 0)
+    assess_count = usage.get("assess", 0)
+    ocr_pct     = int(ocr_count / MAX_OCR_PER_DAY * 100)
+    assess_pct  = int(assess_count / MAX_ASSESS_PER_DAY * 100)
+
+    ocr_color     = "#d4af37" if ocr_pct < 70 else ("#ff9900" if ocr_pct < 90 else "#ff4444")
+    assess_color  = "#d4af37" if assess_pct < 70 else ("#ff9900" if assess_pct < 90 else "#ff4444")
+
+    st.markdown(f"""
+    <div style="font-family:'Tajawal',sans-serif;font-size:13px;color:rgba(220,205,185,0.85)">
+        <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                <span>📷 Image OCR</span>
+                <span style="color:{ocr_color};font-weight:700">{ocr_count} / {MAX_OCR_PER_DAY}</span>
+            </div>
+            <div style="background:rgba(255,255,255,0.07);border-radius:6px;height:6px;overflow:hidden">
+                <div style="width:{ocr_pct}%;height:100%;background:{ocr_color};border-radius:6px;transition:width .3s"></div>
+            </div>
+        </div>
+        <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                <span>✍️ Assessments</span>
+                <span style="color:{assess_color};font-weight:700">{assess_count} / {MAX_ASSESS_PER_DAY}</span>
+            </div>
+            <div style="background:rgba(255,255,255,0.07);border-radius:6px;height:6px;overflow:hidden">
+                <div style="width:{assess_pct}%;height:100%;background:{assess_color};border-radius:6px;transition:width .3s"></div>
+            </div>
+        </div>
+        <div style="font-size:11px;color:rgba(212,175,55,0.4);margin-top:6px">🔄 Resets daily at midnight</div>
+        <div style="font-size:11px;color:rgba(100,220,100,0.5);margin-top:3px">💾 Cached results don't count</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.divider()
 
 # --- Rich Arabic-Inspired CSS ---
 st.markdown("""
