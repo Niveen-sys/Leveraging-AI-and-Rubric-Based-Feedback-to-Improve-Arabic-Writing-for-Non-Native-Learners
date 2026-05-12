@@ -481,34 +481,32 @@ STRICT RULES — NEVER BREAK THESE:
 """
 
 
-def get_google_api_key() -> str:
-    """Retrieve Google API key for Vision/OCR."""
-    key = (
-        os.environ.get("GOOGLE_API_KEY")
-        or st.session_state.get("google_api_key", "").strip()
-    )
-    try:
-        key = key or st.secrets.get("GOOGLE_API_KEY", "")
-    except Exception:
-        pass
-    if not key:
-        raise ValueError("GOOGLE_API_KEY not found. Please enter it in the sidebar.")
-    return key
+# ── API Keys ──────────────────────────────────────────────────────────────────
+GOOGLE_API_KEY = "AIzaSyDummyReplaceWithYourRealKey"   # ← replace if needed
+GROQ_API_KEY   = "gsk_DummyReplaceWithYourRealKey"     # ← replace if needed
+# ──────────────────────────────────────────────────────────────────────────────
 
+def get_google_api_key() -> str:
+    """Return Google API key (hardcoded, then env/secrets as fallback)."""
+    return (
+        GOOGLE_API_KEY
+        or os.environ.get("GOOGLE_API_KEY", "")
+        or _secret("GOOGLE_API_KEY")
+    )
 
 def get_groq_api_key() -> str:
-    """Retrieve Groq API key for text assessment."""
-    key = (
-        os.environ.get("GROQ_API_KEY")
-        or st.session_state.get("groq_api_key", "").strip()
+    """Return Groq API key (hardcoded, then env/secrets as fallback)."""
+    return (
+        GROQ_API_KEY
+        or os.environ.get("GROQ_API_KEY", "")
+        or _secret("GROQ_API_KEY")
     )
+
+def _secret(key: str) -> str:
     try:
-        key = key or st.secrets.get("GROQ_API_KEY", "")
+        return st.secrets.get(key, "")
     except Exception:
-        pass
-    if not key:
-        raise ValueError("GROQ_API_KEY not found. Please enter it in the sidebar.")
-    return key
+        return ""
 
 
 def convert_to_pil_image(uploaded_file) -> list:
@@ -541,7 +539,7 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
     api_key = get_google_api_key()
     genai.configure(api_key=api_key)
 
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]
+    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
     prompt = """This image contains handwritten Arabic text written by a student.
 Please transcribe ALL the Arabic text exactly as written — including any spelling mistakes.
 Do NOT correct errors. Do NOT add punctuation that is not there.
@@ -596,159 +594,194 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- API Key Setup (sidebar) ---
-def _env_has(key):
-    if os.environ.get(key):
-        return True
-    try:
-        return bool(st.secrets.get(key))
-    except Exception:
-        return False
-
-with st.sidebar:
-    st.markdown("### 🔑 API Keys")
-
-    # Google API Key (for OCR / Vision)
-    if not _env_has("GOOGLE_API_KEY"):
-        _google_key = st.text_input(
-            "Google API Key (for image OCR)",
-            type="password",
-            value=st.session_state.get("google_api_key", ""),
-            placeholder="AIza...",
-            help="Used for reading handwritten Arabic images via Gemini Vision",
-        )
-        if _google_key:
-            st.session_state["google_api_key"] = _google_key
-            st.success("✅ Google key saved")
-        else:
-            st.warning("⚠️ Google API key required for image upload")
-    else:
-        st.success("✅ Google API key loaded")
-
-    # Groq API Key (for text assessment)
-    if not _env_has("GROQ_API_KEY"):
-        _groq_key = st.text_input(
-            "Groq API Key (for assessment)",
-            type="password",
-            value=st.session_state.get("groq_api_key", ""),
-            placeholder="gsk_...",
-            help="Used for generating student feedback via Groq LLM",
-        )
-        if _groq_key:
-            st.session_state["groq_api_key"] = _groq_key
-            st.success("✅ Groq key saved")
-        else:
-            st.warning("⚠️ Groq API key required for assessment")
-    else:
-        st.success("✅ Groq API key loaded")
-
 # --- Rich Arabic-Inspired CSS ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&family=Tajawal:wght@300;400;700;900&family=Cinzel+Decorative:wght@700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cinzel+Decorative:wght@700&family=Tajawal:wght@300;400;700;900&display=swap');
 
-    /* ── Base & Background ── */
+    /* ══════════════════════════════════════════
+       BASE & 3D PERSPECTIVE SCENE
+    ══════════════════════════════════════════ */
     .stApp {
-        background: linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 40%, #0d1a2e 100%);
+        background: #06050f;
         min-height: 100vh;
+        perspective: 1200px;
     }
 
-    /* Geometric Arabic pattern overlay */
+    /* Deep layered cosmic background */
     .stApp::before {
         content: '';
         position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background-image:
-            repeating-linear-gradient(45deg, rgba(212,175,55,0.03) 0px, rgba(212,175,55,0.03) 1px, transparent 1px, transparent 40px),
-            repeating-linear-gradient(-45deg, rgba(212,175,55,0.03) 0px, rgba(212,175,55,0.03) 1px, transparent 1px, transparent 40px);
+        inset: 0;
+        background:
+            radial-gradient(ellipse 80% 50% at 20% 20%, rgba(120,60,200,0.18) 0%, transparent 60%),
+            radial-gradient(ellipse 60% 40% at 80% 80%, rgba(212,175,55,0.12) 0%, transparent 50%),
+            radial-gradient(ellipse 100% 80% at 50% 50%, rgba(10,5,30,0.95) 0%, #06050f 100%);
         pointer-events: none;
         z-index: 0;
     }
 
-    /* ── Hero Header ── */
+    /* Islamic geometric SVG pattern overlay */
+    .stApp::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cg fill='none' stroke='rgba(212,175,55,0.07)' stroke-width='0.5'%3E%3Cpolygon points='40,4 52,28 76,28 56,44 64,68 40,54 16,68 24,44 4,28 28,28'/%3E%3Crect x='20' y='20' width='40' height='40' transform='rotate(45 40 40)'/%3E%3Ccircle cx='40' cy='40' r='18'/%3E%3C/g%3E%3C/svg%3E");
+        opacity: 1;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Ensure content above overlays */
+    .main .block-container { position: relative; z-index: 1; }
+
+    /* ══════════════════════════════════════════
+       HERO BANNER — 3D GOLD ARCH
+    ══════════════════════════════════════════ */
     .hero-banner {
-        background: linear-gradient(135deg, #1a0a2e 0%, #2d1554 50%, #1a0a2e 100%);
-        border: 1px solid rgba(212,175,55,0.4);
-        border-radius: 20px;
-        padding: 2.5rem 2rem;
-        margin-bottom: 2rem;
+        background: linear-gradient(160deg,
+            rgba(30,12,60,0.97) 0%,
+            rgba(50,20,90,0.95) 40%,
+            rgba(25,10,50,0.97) 100%);
+        border: 1px solid rgba(212,175,55,0.5);
+        border-radius: 24px;
+        padding: 3rem 2rem 2.5rem;
+        margin-bottom: 2.5rem;
         text-align: center;
         position: relative;
         overflow: hidden;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(212,175,55,0.3);
+        box-shadow:
+            0 0 0 1px rgba(212,175,55,0.15),
+            0 30px 80px rgba(0,0,0,0.7),
+            0 0 60px rgba(120,60,200,0.15),
+            inset 0 1px 0 rgba(212,175,55,0.4),
+            inset 0 -1px 0 rgba(212,175,55,0.1);
+        transform: perspective(800px) rotateX(1deg);
     }
 
+    /* Top gold arch */
     .hero-banner::before {
-        content: "✦ ✧ ✦";
+        content: '';
         position: absolute;
-        top: 12px;
-        left: 50%;
-        transform: translateX(-50%);
-        color: rgba(212,175,55,0.5);
-        font-size: 0.8rem;
-        letter-spacing: 8px;
+        top: 0; left: 10%; right: 10%;
+        height: 3px;
+        background: linear-gradient(90deg,
+            transparent 0%,
+            rgba(212,175,55,0.3) 20%,
+            #d4af37 50%,
+            rgba(212,175,55,0.3) 80%,
+            transparent 100%);
+        border-radius: 0 0 50% 50%;
     }
 
+    /* Ambient glow orbs */
     .hero-banner::after {
-        content: "✦ ✧ ✦";
+        content: '';
         position: absolute;
-        bottom: 12px;
-        left: 50%;
+        top: -60px; left: 50%;
         transform: translateX(-50%);
-        color: rgba(212,175,55,0.5);
-        font-size: 0.8rem;
-        letter-spacing: 8px;
+        width: 300px; height: 200px;
+        background: radial-gradient(ellipse, rgba(212,175,55,0.12) 0%, transparent 70%);
+        pointer-events: none;
     }
 
     .hero-arabic {
-        font-family: 'Scheherazade New', serif;
-        font-size: 2.8rem;
+        font-family: 'Amiri', serif;
+        font-size: 3.2rem;
         font-weight: 700;
-        color: #d4af37;
-        text-shadow: 0 0 30px rgba(212,175,55,0.4), 0 2px 4px rgba(0,0,0,0.8);
+        background: linear-gradient(135deg, #f0d060 0%, #d4af37 40%, #c49a20 70%, #e8c84a 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        filter: drop-shadow(0 2px 12px rgba(212,175,55,0.5));
         margin: 0;
-        line-height: 1.3;
+        line-height: 1.4;
+        letter-spacing: 2px;
+        animation: shimmer 4s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+        0%, 100% { filter: drop-shadow(0 2px 12px rgba(212,175,55,0.4)); }
+        50% { filter: drop-shadow(0 2px 24px rgba(212,175,55,0.8)); }
     }
 
     .hero-english {
         font-family: 'Cinzel Decorative', serif;
-        font-size: 1.1rem;
-        color: rgba(212,175,55,0.8);
-        margin-top: 0.5rem;
-        letter-spacing: 3px;
+        font-size: 0.95rem;
+        color: rgba(212,175,55,0.75);
+        margin-top: 0.6rem;
+        letter-spacing: 5px;
         text-transform: uppercase;
     }
 
     .hero-sub {
         font-family: 'Tajawal', sans-serif;
-        font-size: 0.95rem;
-        color: rgba(200,200,255,0.7);
+        font-size: 0.9rem;
+        color: rgba(180,160,220,0.7);
         margin-top: 0.8rem;
     }
 
-    /* ── Section Cards ── */
-    .section-card {
-        background: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
-        border: 1px solid rgba(212,175,55,0.25);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.2rem;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
-        position: relative;
+    /* Decorative corner ornaments */
+    .hero-ornament {
+        position: absolute;
+        font-size: 1.4rem;
+        color: rgba(212,175,55,0.35);
+        line-height: 1;
     }
 
+    /* ══════════════════════════════════════════
+       SECTION CARDS — 3D FLOATING PANELS
+    ══════════════════════════════════════════ */
+    .section-card {
+        background: linear-gradient(145deg,
+            rgba(255,255,255,0.06) 0%,
+            rgba(255,255,255,0.02) 50%,
+            rgba(0,0,0,0.1) 100%);
+        border: 1px solid rgba(212,175,55,0.22);
+        border-radius: 18px;
+        padding: 1.6rem;
+        margin-bottom: 1.4rem;
+        position: relative;
+        overflow: hidden;
+        box-shadow:
+            0 4px 0 rgba(212,175,55,0.08),
+            0 12px 40px rgba(0,0,0,0.4),
+            0 0 0 1px rgba(255,255,255,0.03),
+            inset 0 1px 0 rgba(255,255,255,0.07);
+        transform: perspective(600px) rotateX(0.5deg);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .section-card:hover {
+        transform: perspective(600px) rotateX(0deg) translateY(-2px);
+        box-shadow:
+            0 6px 0 rgba(212,175,55,0.1),
+            0 20px 50px rgba(0,0,0,0.5),
+            0 0 30px rgba(212,175,55,0.05),
+            inset 0 1px 0 rgba(255,255,255,0.09);
+    }
+
+    /* Shimmer top line */
     .section-card::before {
         content: '';
         position: absolute;
-        top: 0; left: 20px; right: 20px;
+        top: 0; left: 15%; right: 15%;
         height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(212,175,55,0.5), transparent);
+        background: linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent);
+    }
+
+    /* Bottom gold shadow bar */
+    .section-card::after {
+        content: '';
+        position: absolute;
+        bottom: -1px; left: 30%; right: 30%;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(212,175,55,0.2), transparent);
     }
 
     .section-title {
         font-family: 'Tajawal', sans-serif;
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 700;
         color: #d4af37;
         margin-bottom: 1rem;
@@ -756,207 +789,306 @@ st.markdown("""
         align-items: center;
         gap: 8px;
         letter-spacing: 1px;
+        text-shadow: 0 0 20px rgba(212,175,55,0.3);
     }
 
-    /* ── Rubric Badge ── */
+    /* ══════════════════════════════════════════
+       RUBRIC BADGE
+    ══════════════════════════════════════════ */
     .rubric-badge {
-        background: linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05));
+        background: linear-gradient(135deg, rgba(212,175,55,0.12), rgba(212,175,55,0.04));
         border: 1px solid rgba(212,175,55,0.4);
-        border-left: 4px solid #d4af37;
+        border-left: 3px solid #d4af37;
         padding: 0.7rem 1rem;
         border-radius: 10px;
         font-family: 'Tajawal', sans-serif;
         font-size: 0.9rem;
         color: #d4af37;
         margin-top: 0.5rem;
-        box-shadow: 0 4px 15px rgba(212,175,55,0.1);
+        box-shadow: 0 4px 20px rgba(212,175,55,0.08), inset 0 1px 0 rgba(212,175,55,0.1);
     }
 
-    /* ── Input Fields ── */
-    .stTextInput input, .stTextArea textarea, .stSelectbox select {
-        background: rgba(255,255,255,0.05) !important;
-        border: 1px solid rgba(212,175,55,0.3) !important;
-        border-radius: 10px !important;
-        color: #f0e6d3 !important;
+    /* ══════════════════════════════════════════
+       INPUT FIELDS — GOLD GLASS
+    ══════════════════════════════════════════ */
+    .stTextInput input, .stTextArea textarea {
+        background: rgba(255,255,255,0.04) !important;
+        border: 1px solid rgba(212,175,55,0.25) !important;
+        border-radius: 12px !important;
+        color: #ede0c8 !important;
         font-family: 'Tajawal', sans-serif !important;
         font-size: 1rem !important;
         transition: all 0.3s ease !important;
+        box-shadow: inset 0 2px 8px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.04) !important;
     }
 
     .stTextInput input:focus, .stTextArea textarea:focus {
-        border-color: #d4af37 !important;
-        box-shadow: 0 0 0 2px rgba(212,175,55,0.2), 0 4px 20px rgba(212,175,55,0.1) !important;
-        background: rgba(255,255,255,0.08) !important;
+        border-color: rgba(212,175,55,0.7) !important;
+        box-shadow:
+            inset 0 2px 8px rgba(0,0,0,0.2),
+            0 0 0 2px rgba(212,175,55,0.15),
+            0 0 20px rgba(212,175,55,0.1) !important;
+        background: rgba(255,255,255,0.06) !important;
     }
 
-    /* ── 3D Assess Button ── */
+    /* ══════════════════════════════════════════
+       3D ASSESS BUTTON — GOLD PILLAR
+    ══════════════════════════════════════════ */
     .stButton > button {
-        background: linear-gradient(145deg, #d4af37, #b8941f) !important;
-        color: #0d0d1a !important;
+        background: linear-gradient(160deg,
+            #f0d060 0%,
+            #d4af37 35%,
+            #b8941f 70%,
+            #9a7a10 100%) !important;
+        color: #0d0a02 !important;
         font-family: 'Tajawal', sans-serif !important;
         font-weight: 900 !important;
-        font-size: 1.1rem !important;
-        letter-spacing: 2px !important;
+        font-size: 1.05rem !important;
+        letter-spacing: 3px !important;
         border: none !important;
-        border-radius: 12px !important;
-        padding: 0.8rem 2rem !important;
+        border-radius: 14px !important;
+        padding: 0.85rem 2.5rem !important;
         box-shadow:
-            0 6px 0 #8a6a10,
-            0 8px 20px rgba(0,0,0,0.4),
-            inset 0 1px 0 rgba(255,255,255,0.3) !important;
-        transform: translateY(0) !important;
-        transition: all 0.15s ease !important;
+            0 8px 0 #5a4000,
+            0 10px 30px rgba(0,0,0,0.6),
+            0 0 0 1px rgba(212,175,55,0.3),
+            inset 0 2px 0 rgba(255,255,255,0.35),
+            inset 0 -2px 0 rgba(0,0,0,0.2) !important;
+        transform: perspective(200px) rotateX(3deg) translateY(0) !important;
+        transition: all 0.12s ease !important;
         text-transform: uppercase !important;
-        cursor: pointer !important;
+        position: relative !important;
     }
 
     .stButton > button:hover {
-        background: linear-gradient(145deg, #e8c84a, #d4af37) !important;
+        background: linear-gradient(160deg,
+            #f8e070 0%,
+            #e8c84a 35%,
+            #d4af37 70%,
+            #b8941f 100%) !important;
         box-shadow:
-            0 4px 0 #8a6a10,
-            0 6px 15px rgba(0,0,0,0.4),
-            inset 0 1px 0 rgba(255,255,255,0.4) !important;
-        transform: translateY(2px) !important;
+            0 5px 0 #5a4000,
+            0 7px 20px rgba(0,0,0,0.5),
+            0 0 0 1px rgba(212,175,55,0.4),
+            inset 0 2px 0 rgba(255,255,255,0.4),
+            0 0 30px rgba(212,175,55,0.2) !important;
+        transform: perspective(200px) rotateX(3deg) translateY(3px) !important;
     }
 
     .stButton > button:active {
         box-shadow:
-            0 1px 0 #8a6a10,
-            0 2px 8px rgba(0,0,0,0.4) !important;
-        transform: translateY(5px) !important;
+            0 2px 0 #5a4000,
+            0 3px 10px rgba(0,0,0,0.5),
+            inset 0 2px 4px rgba(0,0,0,0.3) !important;
+        transform: perspective(200px) rotateX(3deg) translateY(6px) !important;
     }
 
-    /* ── Tabs ── */
+    /* ══════════════════════════════════════════
+       TABS — GOLD SELECTOR
+    ══════════════════════════════════════════ */
     .stTabs [data-baseweb="tab-list"] {
-        background: rgba(255,255,255,0.03) !important;
-        border-radius: 12px !important;
+        background: rgba(10,5,25,0.6) !important;
+        border-radius: 14px !important;
         padding: 4px !important;
         border: 1px solid rgba(212,175,55,0.2) !important;
         gap: 4px !important;
+        box-shadow: inset 0 2px 8px rgba(0,0,0,0.4) !important;
     }
 
     .stTabs [data-baseweb="tab"] {
         font-family: 'Tajawal', sans-serif !important;
         font-weight: 700 !important;
-        color: rgba(212,175,55,0.6) !important;
-        border-radius: 8px !important;
-        padding: 0.5rem 1rem !important;
-        transition: all 0.2s ease !important;
+        color: rgba(212,175,55,0.5) !important;
+        border-radius: 10px !important;
+        padding: 0.5rem 1.2rem !important;
+        transition: all 0.25s ease !important;
     }
 
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, rgba(212,175,55,0.25), rgba(212,175,55,0.1)) !important;
+        background: linear-gradient(135deg, rgba(212,175,55,0.22), rgba(212,175,55,0.08)) !important;
         color: #d4af37 !important;
-        box-shadow: 0 2px 8px rgba(212,175,55,0.2) !important;
+        box-shadow:
+            0 2px 8px rgba(212,175,55,0.15),
+            inset 0 1px 0 rgba(212,175,55,0.3) !important;
     }
 
-    /* ── Slider ── */
-    .stSlider [data-baseweb="slider"] {
-        padding: 0.5rem 0 !important;
+    /* ══════════════════════════════════════════
+       SLIDER
+    ══════════════════════════════════════════ */
+    .stSlider [data-baseweb="slider"] { padding: 0.5rem 0 !important; }
+    .stSlider [data-baseweb="thumb"] {
+        background: linear-gradient(145deg, #f0d060, #d4af37) !important;
+        border: 2px solid #b8941f !important;
+        box-shadow: 0 2px 8px rgba(212,175,55,0.4) !important;
+    }
+    .stSlider [data-baseweb="track-fill"] {
+        background: linear-gradient(90deg, #d4af37, #f0d060) !important;
     }
 
-    /* ── Labels & Text ── */
-    .stTextInput label, .stTextArea label, .stSlider label, .stFileUploader label {
+    /* ══════════════════════════════════════════
+       LABELS & TEXT
+    ══════════════════════════════════════════ */
+    .stTextInput label, .stTextArea label,
+    .stSlider label, .stFileUploader label,
+    .stToggle label {
         font-family: 'Tajawal', sans-serif !important;
         font-weight: 700 !important;
         color: rgba(212,175,55,0.9) !important;
-        font-size: 0.95rem !important;
+        font-size: 0.92rem !important;
         letter-spacing: 0.5px !important;
     }
 
-    p, .stMarkdown, .stCaption {
-        color: rgba(220,210,200,0.85) !important;
-        font-family: 'Tajawal', sans-serif !important;
-    }
+    p, .stMarkdown p, .stCaption { color: rgba(220,205,185,0.85) !important; font-family: 'Tajawal', sans-serif !important; }
+    h1, h2, h3 { font-family: 'Tajawal', sans-serif !important; color: #d4af37 !important; }
 
-    h1, h2, h3 {
-        font-family: 'Tajawal', sans-serif !important;
-        color: #d4af37 !important;
-    }
-
-    /* ── Feedback Output Box ── */
+    /* ══════════════════════════════════════════
+       FEEDBACK BOX — ORNATE SCROLL
+    ══════════════════════════════════════════ */
     .feedback-box {
-        background: linear-gradient(145deg, rgba(26,10,46,0.9), rgba(13,13,26,0.9));
-        border: 1px solid rgba(212,175,55,0.35);
-        border-radius: 16px;
-        padding: 2rem;
+        background: linear-gradient(160deg,
+            rgba(22,8,45,0.97),
+            rgba(15,8,30,0.97));
+        border: 1px solid rgba(212,175,55,0.4);
+        border-radius: 20px;
+        padding: 2.5rem 2rem;
         margin-top: 1.5rem;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(212,175,55,0.2);
         position: relative;
+        box-shadow:
+            0 0 0 1px rgba(212,175,55,0.08),
+            0 30px 80px rgba(0,0,0,0.6),
+            0 0 40px rgba(120,60,200,0.1),
+            inset 0 1px 0 rgba(212,175,55,0.2),
+            inset 0 -1px 0 rgba(212,175,55,0.08);
     }
 
+    /* Floating label badge */
     .feedback-box::before {
-        content: "❧ تقييم الطالب ❧";
+        content: "❧  تقييم الطالب  ❧";
         position: absolute;
-        top: -12px;
+        top: -14px;
         left: 50%;
         transform: translateX(-50%);
-        background: linear-gradient(135deg, #d4af37, #b8941f);
-        color: #0d0d1a;
+        background: linear-gradient(135deg, #d4af37 0%, #b8941f 100%);
+        color: #0d0a02;
         font-family: 'Tajawal', sans-serif;
         font-weight: 900;
-        font-size: 0.8rem;
-        padding: 2px 16px;
+        font-size: 0.78rem;
+        padding: 3px 20px;
         border-radius: 20px;
-        letter-spacing: 2px;
+        letter-spacing: 3px;
         white-space: nowrap;
+        box-shadow: 0 4px 15px rgba(212,175,55,0.3);
     }
 
-    /* ── Info / Success / Warning boxes ── */
+    /* Top shimmer */
+    .feedback-box::after {
+        content: '';
+        position: absolute;
+        top: 0; left: 15%; right: 15%;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(212,175,55,0.5), transparent);
+    }
+
+    /* ══════════════════════════════════════════
+       ALERTS
+    ══════════════════════════════════════════ */
     .stAlert {
-        border-radius: 12px !important;
-        border: 1px solid rgba(212,175,55,0.2) !important;
-        background: rgba(255,255,255,0.04) !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(212,175,55,0.18) !important;
+        background: rgba(20,10,40,0.6) !important;
+        backdrop-filter: blur(8px) !important;
     }
 
-    /* ── Divider ── */
+    /* ══════════════════════════════════════════
+       DIVIDER
+    ══════════════════════════════════════════ */
     hr {
-        border-color: rgba(212,175,55,0.2) !important;
+        border: none !important;
+        height: 1px !important;
+        background: linear-gradient(90deg, transparent, rgba(212,175,55,0.3), transparent) !important;
+        margin: 1.5rem 0 !important;
     }
 
-    /* ── Scrollbar ── */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
-    ::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.3); border-radius: 3px; }
-
-    /* ── Download button ── */
+    /* ══════════════════════════════════════════
+       DOWNLOAD BUTTON
+    ══════════════════════════════════════════ */
     .stDownloadButton > button {
-        background: linear-gradient(145deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05)) !important;
+        background: linear-gradient(145deg, rgba(212,175,55,0.12), rgba(212,175,55,0.04)) !important;
         border: 1px solid rgba(212,175,55,0.4) !important;
         color: #d4af37 !important;
         font-family: 'Tajawal', sans-serif !important;
         font-weight: 700 !important;
-        border-radius: 10px !important;
-        transition: all 0.2s ease !important;
-        box-shadow: 0 4px 0 rgba(212,175,55,0.2), 0 6px 15px rgba(0,0,0,0.3) !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 0 rgba(212,175,55,0.15), 0 6px 20px rgba(0,0,0,0.3) !important;
+        transition: all 0.15s ease !important;
     }
 
     .stDownloadButton > button:hover {
-        background: linear-gradient(145deg, rgba(212,175,55,0.25), rgba(212,175,55,0.1)) !important;
+        background: linear-gradient(145deg, rgba(212,175,55,0.2), rgba(212,175,55,0.08)) !important;
         transform: translateY(2px) !important;
-        box-shadow: 0 2px 0 rgba(212,175,55,0.2), 0 4px 10px rgba(0,0,0,0.3) !important;
+        box-shadow: 0 2px 0 rgba(212,175,55,0.15), 0 4px 12px rgba(0,0,0,0.3) !important;
     }
 
-    /* ── File uploader ── */
-    .stFileUploader {
+    /* ══════════════════════════════════════════
+       FILE UPLOADER
+    ══════════════════════════════════════════ */
+    [data-testid="stFileUploader"] {
         border: 1px dashed rgba(212,175,55,0.3) !important;
-        border-radius: 12px !important;
-        padding: 0.5rem !important;
-        background: rgba(255,255,255,0.02) !important;
+        border-radius: 14px !important;
+        padding: 0.6rem !important;
+        background: rgba(212,175,55,0.02) !important;
+        transition: all 0.3s ease !important;
     }
 
-    /* Hide Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    [data-testid="stFileUploader"]:hover {
+        border-color: rgba(212,175,55,0.55) !important;
+        background: rgba(212,175,55,0.04) !important;
+    }
+
+    /* ══════════════════════════════════════════
+       SCROLLBAR
+    ══════════════════════════════════════════ */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.01); }
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, rgba(212,175,55,0.4), rgba(212,175,55,0.2));
+        border-radius: 3px;
+    }
+
+    /* ══════════════════════════════════════════
+       SPINNER / PROGRESS
+    ══════════════════════════════════════════ */
+    .stSpinner > div { border-top-color: #d4af37 !important; }
+
+    /* ══════════════════════════════════════════
+       SIDEBAR (API key area)
+    ══════════════════════════════════════════ */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0d0820 0%, #080514 100%) !important;
+        border-right: 1px solid rgba(212,175,55,0.2) !important;
+    }
+
+    /* ══════════════════════════════════════════
+       HIDE STREAMLIT CHROME
+    ══════════════════════════════════════════ */
+    #MainMenu { visibility: hidden; }
+    footer { visibility: hidden; }
+    [data-testid="stToolbar"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Hero Banner ──
 st.markdown("""
 <div class="hero-banner">
+    <span class="hero-ornament" style="top:14px;left:18px;">✦</span>
+    <span class="hero-ornament" style="top:14px;right:18px;">✦</span>
+    <span class="hero-ornament" style="bottom:14px;left:18px;">✧</span>
+    <span class="hero-ornament" style="bottom:14px;right:18px;">✧</span>
+    <div style="font-family:'Amiri',serif;font-size:0.85rem;color:rgba(212,175,55,0.45);letter-spacing:12px;margin-bottom:0.6rem;">بِسْمِ اللَّهِ</div>
     <div class="hero-arabic">مُقيِّم الكتابة العربية</div>
     <div class="hero-english">Arabic Writing Assessor</div>
-    <div class="hero-sub">✦ AI-powered feedback for non-native Arabic learners — powered by Gemini ✦</div>
+    <div style="width:120px;height:1px;background:linear-gradient(90deg,transparent,rgba(212,175,55,0.5),transparent);margin:0.9rem auto;"></div>
+    <div class="hero-sub">✦ &nbsp; تقييم ذكي لكتابات الطلاب بالذكاء الاصطناعي &nbsp; ✦</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1007,7 +1139,8 @@ with col_left:
     word_bank_text = ""
     if use_word_bank:
         st.caption("Add vocabulary words you want the student to use. The AI will check if they used them and suggest relevant ones.")
-        wb_tab1, wb_tab2 = st.tabs(["✏️ Type Words", "📄 Upload CSV"])
+        wb_tab1, wb_tab2, wb_tab3 = st.tabs(["✏️ Type Words", "📄 Upload CSV / TXT", "📷 Upload Photo / PDF"])
+
         with wb_tab1:
             word_bank_text = st.text_area(
                 "Type words (one per line or comma-separated)",
@@ -1015,14 +1148,18 @@ with col_left:
                 placeholder="e.g. بالإضافة إلى ذلك، على الرغم من، في المقابل، لذلك، ومن ثم",
                 help="Type Arabic vocabulary words, phrases, connectives, or adjectives you want the student to use."
             )
+
         with wb_tab2:
-            wb_csv = st.file_uploader("Upload a CSV file with words", type=["csv", "txt"], key="wb_csv")
+            wb_csv = st.file_uploader(
+                "Upload CSV or TXT word list",
+                type=["csv", "txt"],
+                key="wb_csv"
+            )
             if wb_csv:
                 try:
                     import pandas as pd
                     from io import StringIO
                     wb_content = wb_csv.read().decode("utf-8")
-                    # Try reading as CSV first, fallback to plain text
                     try:
                         wb_df = pd.read_csv(StringIO(wb_content))
                         word_bank_text = "\n".join(wb_df.iloc[:, 0].dropna().astype(str).tolist())
@@ -1032,6 +1169,32 @@ with col_left:
                     st.text_area("Preview:", value=word_bank_text, height=100, disabled=True)
                 except Exception as e:
                     st.error(f"❌ Could not read file: {str(e)}")
+
+        with wb_tab3:
+            st.caption("📸 Upload a photo, screenshot, or PDF of your word bank — AI will read the words automatically.")
+            wb_imgs = st.file_uploader(
+                "Upload word bank image(s) or PDF",
+                type=["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp", "pdf"],
+                key="wb_img",
+                accept_multiple_files=True
+            )
+            if wb_imgs:
+                all_wb_words = []
+                with st.spinner(f"🔍 Reading {len(wb_imgs)} file(s) for words..."):
+                    for i, wb_img in enumerate(wb_imgs):
+                        try:
+                            extracted_words = extract_arabic_from_image_gemini(wb_img)
+                            if extracted_words and extracted_words.strip():
+                                all_wb_words.append(extracted_words.strip())
+                                st.success(f"✅ File {i+1} read successfully")
+                            else:
+                                st.warning(f"⚠️ Could not extract words from file {i+1}. Try a clearer photo.")
+                        except Exception as e:
+                            st.error(f"❌ Could not read file {i+1}: {str(e)}")
+                if all_wb_words:
+                    word_bank_text = "\n".join(all_wb_words)
+                    st.markdown("**📝 Extracted words:**")
+                    st.text_area("Preview:", value=word_bank_text, height=100, disabled=True)
 
 with col_right:
     st.markdown('<div class="section-title">✍️ Student Writing</div>', unsafe_allow_html=True)
