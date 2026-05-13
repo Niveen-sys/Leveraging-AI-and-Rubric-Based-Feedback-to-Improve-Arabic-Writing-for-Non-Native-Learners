@@ -622,6 +622,25 @@ def pil_image_to_base64(img) -> str:
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
+def _list_gemini_models(api_key: str) -> list:
+    """Fetch available Gemini models from the API."""
+    url = f"https://generativelanguage.googleapis.com/v1/models?key={api_key}"
+    try:
+        resp = _requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            models = resp.json().get("models", [])
+            # Filter vision-capable models
+            return [
+                m["name"].replace("models/", "")
+                for m in models
+                if "generateContent" in m.get("supportedGenerationMethods", [])
+                and "gemini" in m.get("name", "").lower()
+            ]
+    except Exception:
+        pass
+    return []
+
+
 def _gemini_ocr_rest(img_b64: str, api_key: str, model: str, prompt: str) -> str:
     """Call Gemini Vision via direct REST API — bypasses SDK version issues."""
     url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={api_key}"
@@ -660,7 +679,11 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
         "Return ONLY the Arabic text, nothing else."
     )
 
-    models_to_try = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
+    # Auto-discover available models, fallback to known list
+    discovered = _list_gemini_models(api_key)
+    fallback = ["gemini-2.0-flash-exp", "gemini-2.0-flash", "gemini-2.0-flash-lite",
+                "gemini-1.5-flash-002", "gemini-1.5-flash-8b", "gemini-1.5-pro-002"]
+    models_to_try = discovered if discovered else fallback
     images = convert_to_pil_image(uploaded_file)
     last_error = None
     all_text = []
