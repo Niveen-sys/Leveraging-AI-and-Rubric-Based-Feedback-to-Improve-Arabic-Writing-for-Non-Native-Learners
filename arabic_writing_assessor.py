@@ -2,6 +2,8 @@ import streamlit as st
 import requests as _requests
 from groq import Groq
 import os
+import io
+import base64
 import hashlib
 import time
 from datetime import datetime, date
