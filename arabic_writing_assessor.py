@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+import requests as _requests
 from groq import Groq
 import os
 import hashlib
@@ -620,8 +620,26 @@ def pil_image_to_base64(img) -> str:
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
+def _gemini_ocr_rest(img_b64: str, api_key: str, model: str, prompt: str) -> str:
+    """Call Gemini Vision via direct REST API — bypasses SDK version issues."""
+    url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={api_key}"
+    payload = {
+        "contents": [{
+            "parts": [
+                {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
+                {"text": prompt}
+            ]
+        }]
+    }
+    resp = _requests.post(url, json=payload, timeout=30)
+    if resp.status_code != 200:
+        raise RuntimeError(f"{resp.status_code} {resp.text[:200]}")
+    data = resp.json()
+    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+
 def extract_arabic_from_image_gemini(uploaded_file) -> str:
-    """Use Google Gemini Vision for Arabic OCR — with cache & rate limiting."""
+    """Use Google Gemini Vision for Arabic OCR — direct REST, cache & rate limiting."""
     # Check cache first
     file_hash = _image_hash(uploaded_file)
     cache = _get_ocr_cache()
@@ -633,8 +651,6 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
     _rate_limit()
 
     api_key = get_google_api_key()
-    genai.configure(api_key=api_key)
-
     prompt = (
         "This image contains handwritten Arabic text written by a student. "
         "Transcribe ALL the Arabic text exactly as written, including any spelling mistakes. "
@@ -642,26 +658,30 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
         "Return ONLY the Arabic text, nothing else."
     )
 
-    models_to_try = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"]
+    models_to_try = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
     images = convert_to_pil_image(uploaded_file)
     last_error = None
+    all_text = []
 
-    for model_name in models_to_try:
-        try:
-            model = genai.GenerativeModel(model_name)
-            all_text = []
-            for img in images:
-                response = model.generate_content([img, prompt])
-                all_text.append(response.text.strip())
-            result = "\n".join(all_text)
-            cache[file_hash] = result   # 💾 Save to cache
-            _increment_usage("ocr")     # 📊 Count usage
-            return result
-        except Exception as e:
-            last_error = e
-            continue
+    for img in images:
+        img_b64 = pil_image_to_base64(img)
+        page_text = None
+        for model_name in models_to_try:
+            try:
+                page_text = _gemini_ocr_rest(img_b64, api_key, model_name, prompt)
+                break
+            except Exception as e:
+                last_error = e
+                continue
+        if page_text:
+            all_text.append(page_text)
+        else:
+            raise RuntimeError(f"All OCR models failed. Last error: {last_error}")
 
-    raise RuntimeError(f"All OCR models failed. Last error: {last_error}")
+    result = "\n".join(all_text)
+    cache[file_hash] = result   # 💾 Save to cache
+    _increment_usage("ocr")     # 📊 Count usage
+    return result
 
 
 def assess_with_gemini(prompt: str) -> str:
