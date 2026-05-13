@@ -673,10 +673,19 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
 
     api_key = get_google_api_key()
     prompt = (
-        "This image contains handwritten Arabic text written by a student. "
-        "Transcribe ALL the Arabic text exactly as written, including any spelling mistakes. "
-        "Do NOT correct errors. Do NOT add punctuation that is not there. "
-        "Return ONLY the Arabic text, nothing else."
+        "You are an expert Arabic handwriting transcription specialist. "
+        "This image contains handwritten Arabic text written by a student learner. "
+        "Your task is to transcribe every single Arabic word EXACTLY as the student wrote it — "
+        "letter by letter, stroke by stroke. "
+        "CRITICAL RULES: "
+        "1. Do NOT correct spelling mistakes — if a student wrote a word wrong, keep it wrong. "
+        "2. Pay very close attention to similar-looking letters: "
+        "   ع vs غ, ح vs خ vs ج, ر vs ز, د vs ذ, س vs ش, ص vs ض, ط vs ظ, ه vs ة, ي vs ى vs ئ, و vs ؤ, ا vs إ vs أ vs آ. "
+        "3. Look carefully at dots — a letter with one dot vs two dots vs three dots can be completely different. "
+        "4. Read the full word in context before writing it — Arabic letters connect differently. "
+        "5. Do NOT add any vowel marks (tashkeel) unless clearly written by the student. "
+        "6. Do NOT add punctuation that is not there. "
+        "7. Return ONLY the transcribed Arabic text, line by line as written. Nothing else."
     )
 
     # Auto-discover available models, fallback to known list
