@@ -492,7 +492,7 @@ GOOGLE_API_KEY = "AIzaDummyReplaceWithYourRealKey"   # ← Google key (OCR only)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def get_google_api_key() -> str:
-    """Return Google API key for OCR — secrets → env → hardcoded."""
+    """Return Google API key — secrets first, then env, then hardcoded."""
     return (
         _secret("GOOGLE_API_KEY")
         or os.environ.get("GOOGLE_API_KEY", "")
@@ -500,11 +500,11 @@ def get_google_api_key() -> str:
     )
 
 def get_groq_api_key() -> str:
-    """Return Groq API key (hardcoded, then env/secrets as fallback)."""
+    """Return Groq API key — secrets first, then env, then hardcoded."""
     return (
-        GROQ_API_KEY
+        _secret("GROQ_API_KEY")
         or os.environ.get("GROQ_API_KEY", "")
-        or _secret("GROQ_API_KEY")
+        or GROQ_API_KEY
     )
 
 def _secret(key: str) -> str:
