@@ -642,7 +642,7 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
         "Return ONLY the Arabic text, nothing else."
     )
 
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
+    models_to_try = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"]
     images = convert_to_pil_image(uploaded_file)
     last_error = None
 
