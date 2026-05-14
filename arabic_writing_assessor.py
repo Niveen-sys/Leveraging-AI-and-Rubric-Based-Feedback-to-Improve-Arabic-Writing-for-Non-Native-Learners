@@ -367,122 +367,61 @@ def get_level_note(year: int) -> str:
 
 def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_key: str, rubric: str, word_bank: str = '') -> str:
     first_name = name.strip().split()[0] if name.strip() else name
-    tip_count = 3 if year <= 4 else 5
     level_note = get_level_note(year)
-    word_bank_section = f"""The teacher has provided a word bank of vocabulary to encourage. 
-Use these words as reference when giving vocabulary advice and suggestions:
-{word_bank}
-
-When giving feedback:
-- Check if the student used any of these words — praise them if they did
-- Suggest 2-3 relevant unused words from this list that would improve their writing
-- Add a section: ### 📚 Word Bank Suggestions — showing which words to try next time""" if word_bank.strip() else "No word bank provided — skip the Word Bank Suggestions section."
+    word_bank_section = f"""Word Bank provided by teacher: {word_bank}
+- Check if student used any of these words — praise them specifically if they did
+- Suggest unused words from this list that would improve their writing""" if word_bank.strip() else "No word bank provided."
 
     return f"""
-You are a warm, supportive Arabic teacher giving personalised feedback to a non-native student.
+You are an experienced Arabic teacher marking a student's handwritten work.
+You must produce feedback in EXACTLY the same style as this teacher example:
 
-STUDENT PROFILE:
-- Name: {name}
-- First name: {first_name}
-- Years of Learning Arabic: {year} (Rubric level: {rubric_key} years)
+TEACHER STYLE EXAMPLE:
+★ Amazing informations expressed clearly using past tense
+★ Nice opening & closure  
+★ Excellent use of time adverbs & connectives
+↗ Use different subjects in your writing (family members)
+
+YOUR FEEDBACK MUST:
+1. Be written in English
+2. Use ★ bullet points for WWW (green stars — what went well)
+3. Use ↗ for EBI (red arrow) — start each EBI point with "Even better if you use..." or "Even better if you..."
+4. Be SHORT and punchy — no long paragraphs, just clear bullet points
+5. List spelling mistakes clearly as: [wrong] → [correct]
+6. Be appropriate for Year {year} student ({year} years of Arabic) — keep language simple and encouraging
+7. NEVER say "for X years" about the student — just give feedback on the work
+
+STUDENT: {first_name} (Year {year} — {year} years of Arabic study)
 
 LEVEL GUIDANCE:
 {level_note}
 
-LEARNING OBJECTIVE (LO):
-{lo if lo.strip() else "Not provided."}
-
-SUCCESS CRITERIA:
-{sc if sc.strip() else "Not provided."}
-
-RUBRIC ({rubric_key} years of study):
-{rubric}
-
-WORD BANK / VOCABULARY LIST (OPTIONAL — only if provided):
+LEARNING OBJECTIVE: {lo if lo.strip() else "Not provided."}
+SUCCESS CRITERIA: {sc if sc.strip() else "Not provided."}
+RUBRIC: {rubric}
 {word_bank_section}
 
 STUDENT WRITING:
 {writing}
 
-───────────────────────────────────────────
-OUTPUT FORMAT (follow exactly — use these headings and emojis):
+OUTPUT — return ONLY this JSON and nothing else (no markdown, no explanation):
+{{
+  "www": ["strength 1", "strength 2", "strength 3"],
+  "ebi": ["improvement 1", "improvement 2"],
+  "spelling": [{{"wrong": "xxx", "correct": "yyy"}}, ...],
+  "grammar": [{{"original": "sentence from writing", "issue": "what is wrong", "hint": "guide to fix without giving answer"}}],
+  "sc_check": [{{"criterion": "...", "met": true/false, "comment": "..."}}],
+  "score": {{"level": "Beginning/Developing/Accomplished/Advanced/Exemplary", "score": 0, "out_of": 15, "reason": "..."}}
+}}
 
-### 👋 Hello, {first_name}!
-Start with one warm, personalised sentence using the student's name that references something specific and positive from their actual writing.
-Example style: "Well done, {first_name}, you did a great job using..."
-
----
-
-### ⭐ WWW — What Went Well:
-Give exactly TWO clear strengths. Be specific — refer directly to the student's writing.
-Use {first_name}'s name naturally at least once here.
-
-- **Strength 1:** ...
-- **Strength 2:** ...
-
----
-
-### 🔴 EBI — Even Better If:
-Give exactly ONE main improvement point. Keep it achievable and kind.
-Do NOT list everything — pick the single most important issue.
-
-> **Quote:** "exact text from student writing"
-> **Category:** Grammar / Spelling / Vocabulary / Sentence Structure
-> **What's wrong:** (1 sentence, plain language)
-> **Hint:** Guide {first_name} toward the fix — do NOT rewrite or give the full answer
-
----
-
-### ✏️ Spelling Corrections:
-List spelling mistakes found in the writing using this format only:
-- ❌ wrong word → ✅ correct word
-
-(If no spelling errors, write: "Great job — no spelling errors found! 🎉")
-
----
-
-### 🏗️ Structure Advice:
-Give 1-2 sentences of structure advice adapted to {first_name}'s level ({year} years of study).
-Base this on the rubric expectations for this level.
-
----
-
-### 🟡 Success Criteria Check:
-(Only include if Success Criteria were provided — otherwise skip this section entirely)
-- ✔ [Criterion] — briefly explain why it's met
-- ✖ [Criterion] — briefly explain why it's not yet met
-
----
-
-### 🟢 Top {tip_count} Tips to Improve:
-Actionable tips specific to {first_name}'s actual writing — no generic advice.
-1.
-2.
-3.
-{"4.\n5." if tip_count == 5 else ""}
-
----
-
-### 🔵 Rubric Level:
-- **Level:** Beginning / Developing / Accomplished / Advanced / Exemplary
-- **Score estimate:** X / 15
-- **Why:** 2-3 sentences tied directly to the rubric for {rubric_key} years of study.
-
----
-
-### 💪 Next Step:
-End with one clear, simple target sentence starting with:
-"Next time, try to..."
-Then close with one warm motivational line addressed to {first_name}.
-
-───────────────────────────────────────────
-STRICT RULES — NEVER BREAK THESE:
-- NEVER rewrite the student's full text
-- NEVER provide fully corrected sentences
-- Use {first_name}'s name naturally — not in every sentence, but enough to feel personal
-- Keep tone encouraging, honest, and simple
-- Adapt all expectations to the student's level ({year} years of study)
-- DO NOT give generic advice — tie everything to the student's actual writing
+RULES:
+- www: 2-3 specific strengths referencing actual words/sentences the student wrote
+- ebi: 1-2 improvements MAX — MUST start each one with "Even better if you use..." or "Even better if you..." — pick the most important only, keep it kind and specific
+- spelling: list EVERY spelling mistake found — if none write []
+- grammar: list grammar issues with a HINT not the answer — so student discovers it themselves
+- sc_check: only if success criteria provided
+- score: based on rubric for {rubric_key} years of study
+- Keep everything age-appropriate for Year {year}
 """
 
 
@@ -1495,14 +1434,212 @@ if assess_btn:
             )
             result = assess_with_gemini(prompt)
 
-            st.markdown('<div class="feedback-box">', unsafe_allow_html=True)
-            st.markdown(result)
-            st.markdown('</div>', unsafe_allow_html=True)
+            # Parse JSON result
+            import json, re
+            try:
+                clean = re.sub(r"```json|```", "", result).strip()
+                data = json.loads(clean)
+            except Exception:
+                data = None
+
+            if data:
+                www     = data.get("www", [])
+                ebi     = data.get("ebi", [])
+                spelling = data.get("spelling", [])
+                grammar  = data.get("grammar", [])
+                sc_check = data.get("sc_check", [])
+                score    = data.get("score", {})
+
+                # Build HTML report
+                first_name = name.strip().split()[0] if name.strip() else name
+
+                # WWW rows
+                www_rows = "".join([f"""
+                <tr>
+                  <td style="padding:14px 18px;vertical-align:top;width:36px">
+                    <span style="font-size:22px">★</span>
+                  </td>
+                  <td style="padding:14px 18px;font-size:17px;line-height:1.6;color:#1a3a1a">{w}</td>
+                </tr>""" for w in www])
+
+                # EBI rows
+                ebi_rows = "".join([f"""
+                <tr>
+                  <td style="padding:14px 18px;vertical-align:top;width:36px">
+                    <span style="font-size:22px">↗</span>
+                  </td>
+                  <td style="padding:14px 18px;font-size:17px;line-height:1.6;color:#3a0a0a">{e}</td>
+                </tr>""" for e in ebi])
+
+                # Spelling rows
+                if spelling:
+                    spell_rows = "".join([f"""
+                    <tr>
+                      <td style="padding:10px 18px;font-size:17px;color:#8b0000;text-decoration:line-through;font-family:'Amiri',serif;direction:rtl">{s.get('wrong','')}</td>
+                      <td style="padding:10px 18px;font-size:22px;color:#555">→</td>
+                      <td style="padding:10px 18px;font-size:17px;color:#155724;font-weight:700;font-family:'Amiri',serif;direction:rtl">{s.get('correct','')}</td>
+                    </tr>""" for s in spelling])
+                    spelling_section = f"""
+                    <div style="margin-top:28px">
+                      <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#d4af37;letter-spacing:3px;margin-bottom:12px">✏️ SPELLING CORRECTIONS</div>
+                      <table style="width:100%;border-collapse:collapse;background:rgba(139,0,0,0.04);border-radius:14px;overflow:hidden;border:1px solid rgba(139,0,0,0.15)">
+                        <thead>
+                          <tr style="background:rgba(139,0,0,0.08)">
+                            <th style="padding:10px 18px;font-size:13px;color:#8b0000;text-align:left;font-weight:700;letter-spacing:2px">WRITTEN</th>
+                            <th style="padding:10px 18px"></th>
+                            <th style="padding:10px 18px;font-size:13px;color:#155724;text-align:left;font-weight:700;letter-spacing:2px">CORRECT</th>
+                          </tr>
+                        </thead>
+                        <tbody>{spell_rows}</tbody>
+                      </table>
+                    </div>"""
+                else:
+                    spelling_section = """
+                    <div style="margin-top:28px;padding:14px 18px;background:rgba(21,87,36,0.08);border-radius:12px;border:1px solid rgba(21,87,36,0.2);font-size:16px;color:#155724">
+                      🎉 Great job — no spelling errors found!
+                    </div>"""
+
+                # Grammar rows
+                grammar_section = ""
+                if grammar:
+                    gram_rows = "".join([f"""
+                    <tr style="border-bottom:1px solid rgba(212,175,55,0.1)">
+                      <td style="padding:14px 18px;font-size:16px;font-family:'Amiri',serif;direction:rtl;color:#7a5c00;font-style:italic">"{g.get('original','')}"</td>
+                      <td style="padding:14px 18px;font-size:15px;color:#5a4000">{g.get('issue','')}</td>
+                      <td style="padding:14px 18px;font-size:15px;color:#d4af37;font-style:italic">💡 {g.get('hint','')}</td>
+                    </tr>""" for g in grammar])
+                    grammar_section = f"""
+                    <div style="margin-top:28px">
+                      <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#d4af37;letter-spacing:3px;margin-bottom:12px">📐 GRAMMAR NOTES</div>
+                      <table style="width:100%;border-collapse:collapse;background:rgba(212,175,55,0.04);border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,0.2)">
+                        <thead>
+                          <tr style="background:rgba(212,175,55,0.1)">
+                            <th style="padding:10px 18px;font-size:13px;color:#7a5c00;text-align:left;font-weight:700;letter-spacing:2px;width:33%">WHAT YOU WROTE</th>
+                            <th style="padding:10px 18px;font-size:13px;color:#7a5c00;text-align:left;font-weight:700;letter-spacing:2px;width:33%">THE ISSUE</th>
+                            <th style="padding:10px 18px;font-size:13px;color:#7a5c00;text-align:left;font-weight:700;letter-spacing:2px;width:33%">HINT</th>
+                          </tr>
+                        </thead>
+                        <tbody>{gram_rows}</tbody>
+                      </table>
+                    </div>"""
+
+                # SC check
+                sc_section = ""
+                if sc_check:
+                    sc_rows = "".join([f"""
+                    <tr style="border-bottom:1px solid rgba(212,175,55,0.08)">
+                      <td style="padding:12px 18px;font-size:16px;color:#ede0c8">{s.get('criterion','')}</td>
+                      <td style="padding:12px 18px;font-size:20px;text-align:center">{"✅" if s.get('met') else "❌"}</td>
+                      <td style="padding:12px 18px;font-size:15px;color:rgba(220,205,185,0.7)">{s.get('comment','')}</td>
+                    </tr>""" for s in sc_check])
+                    sc_section = f"""
+                    <div style="margin-top:28px">
+                      <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#d4af37;letter-spacing:3px;margin-bottom:12px">🎯 SUCCESS CRITERIA</div>
+                      <table style="width:100%;border-collapse:collapse;background:rgba(255,255,255,0.03);border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,0.15)">
+                        <thead>
+                          <tr style="background:rgba(212,175,55,0.08)">
+                            <th style="padding:10px 18px;font-size:13px;color:#d4af37;text-align:left;font-weight:700;letter-spacing:2px">CRITERION</th>
+                            <th style="padding:10px 18px;font-size:13px;color:#d4af37;text-align:center;font-weight:700;letter-spacing:2px;width:80px">MET?</th>
+                            <th style="padding:10px 18px;font-size:13px;color:#d4af37;text-align:left;font-weight:700;letter-spacing:2px">COMMENT</th>
+                          </tr>
+                        </thead>
+                        <tbody>{sc_rows}</tbody>
+                      </table>
+                    </div>"""
+
+                # Score badge
+                level_colors = {
+                    "Beginning": "#8b0000",
+                    "Developing": "#b8600a",
+                    "Accomplished": "#0a5c8b",
+                    "Advanced": "#155724",
+                    "Exemplary": "#4a0080"
+                }
+                lvl = score.get("level", "Developing")
+                lvl_color = level_colors.get(lvl, "#5a4000")
+
+                html_report = f"""
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cinzel+Decorative:wght@700&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<div style="
+  background:linear-gradient(160deg,rgba(22,8,45,0.98),rgba(15,8,30,0.98));
+  border:1px solid rgba(212,175,55,0.4);
+  border-radius:24px;
+  padding:36px 32px;
+  margin-top:20px;
+  font-family:'Tajawal',sans-serif;
+  box-shadow:0 30px 80px rgba(0,0,0,0.6),inset 0 1px 0 rgba(212,175,55,0.2);
+  position:relative;
+">
+
+  <!-- Header -->
+  <div style="text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid rgba(212,175,55,0.2)">
+    <div style="font-family:'Cinzel Decorative',serif;font-size:11px;color:rgba(212,175,55,0.5);letter-spacing:6px;margin-bottom:8px">ARABIC WRITING ASSESSMENT</div>
+    <div style="font-family:'Amiri',serif;font-size:32px;color:#d4af37;font-weight:700">{first_name}</div>
+    <div style="font-size:13px;color:rgba(212,175,55,0.5);margin-top:4px;letter-spacing:2px">YEAR {year} &nbsp;·&nbsp; {year} YEARS OF ARABIC</div>
+  </div>
+
+  <!-- WWW Table -->
+  <div style="margin-bottom:24px">
+    <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#4caf50;letter-spacing:4px;margin-bottom:12px">★ WHAT WENT WELL</div>
+    <table style="width:100%;border-collapse:collapse;background:rgba(21,87,36,0.1);border-radius:16px;overflow:hidden;border:1px solid rgba(76,175,80,0.3)">
+      <tbody style="color:#c8e6c9">{www_rows}</tbody>
+    </table>
+  </div>
+
+  <!-- EBI Table -->
+  <div style="margin-bottom:8px">
+    <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#ef5350;letter-spacing:4px;margin-bottom:12px">↗ EVEN BETTER IF YOU...</div>
+    <table style="width:100%;border-collapse:collapse;background:rgba(139,0,0,0.1);border-radius:16px;overflow:hidden;border:1px solid rgba(239,83,80,0.3)">
+      <tbody style="color:#ffcdd2">{ebi_rows}</tbody>
+    </table>
+  </div>
+
+  {spelling_section}
+  {grammar_section}
+  {sc_section}
+
+  <!-- Score Badge -->
+  <div style="margin-top:32px;padding:20px 24px;background:rgba(212,175,55,0.06);border-radius:16px;border:1px solid rgba(212,175,55,0.25);display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+    <div style="text-align:center;min-width:100px">
+      <div style="font-size:42px;font-weight:900;color:#d4af37;line-height:1">{score.get('score','?')}<span style="font-size:20px;color:rgba(212,175,55,0.5)">/{score.get('out_of',15)}</span></div>
+      <div style="font-size:11px;color:rgba(212,175,55,0.5);letter-spacing:2px;margin-top:4px">SCORE</div>
+    </div>
+    <div style="flex:1">
+      <div style="display:inline-block;background:{lvl_color};color:white;font-size:12px;font-weight:700;letter-spacing:3px;padding:4px 16px;border-radius:20px;margin-bottom:8px">{lvl.upper()}</div>
+      <div style="font-size:15px;color:rgba(220,205,185,0.8);line-height:1.6">{score.get('reason','')}</div>
+    </div>
+  </div>
+
+</div>"""
+
+                st.markdown(html_report, unsafe_allow_html=True)
+
+                # Download as formatted text
+                txt_lines = [f"FEEDBACK FOR {name.upper()} — Year {year}\n{'='*50}"]
+                txt_lines.append("\n★ WHAT WENT WELL:")
+                for w in www: txt_lines.append(f"  ★ {w}")
+                txt_lines.append("\n↗ EVEN BETTER IF:")
+                for e in ebi: txt_lines.append(f"  ↗ {e}")
+                if spelling:
+                    txt_lines.append("\n✏️ SPELLING:")
+                    for s in spelling: txt_lines.append(f"  {s.get('wrong','')} → {s.get('correct','')}")
+                if grammar:
+                    txt_lines.append("\n📐 GRAMMAR:")
+                    for g in grammar: txt_lines.append(f"  \"{g.get('original','')}\" — {g.get('issue','')} | Hint: {g.get('hint','')}")
+                txt_lines.append(f"\n🏆 SCORE: {score.get('score','?')}/{score.get('out_of',15)} — {score.get('level','')}")
+                txt_lines.append(score.get('reason',''))
+
+            else:
+                # Fallback plain display
+                st.markdown('<div class="feedback-box">', unsafe_allow_html=True)
+                st.markdown(result)
+                st.markdown('</div>', unsafe_allow_html=True)
+                txt_lines = [result]
 
             st.divider()
             st.download_button(
-                label="⬇️ Download Feedback as .txt",
-                data=result,
+                label="⬇️ Download Feedback Report",
+                data="\n".join(txt_lines),
                 file_name=f"feedback_{name.strip().replace(' ', '_')}.txt",
                 mime="text/plain"
             )
