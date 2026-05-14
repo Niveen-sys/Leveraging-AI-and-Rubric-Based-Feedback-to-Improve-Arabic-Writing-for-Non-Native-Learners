@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests as _requests
 from groq import Groq
 import os
@@ -1391,9 +1392,27 @@ with col_right:
                         st.error(f"❌ Could not read file {i+1}: {str(e)}")
             if all_extracted:
                 extracted_writing = "\n".join(all_extracted)
-                st.markdown("**📝 Extracted text:**")
-                st.markdown(f"> {extracted_writing}")
-                writing = extracted_writing
+
+                st.markdown("""
+<div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.35);border-radius:14px;padding:14px 18px;margin:10px 0">
+<div style="font-size:12px;color:#d4af37;letter-spacing:2px;font-weight:700;margin-bottom:8px">📝 OCR READ THIS — PLEASE CHECK & CORRECT IF NEEDED</div>
+<div style="font-size:11px;color:rgba(212,175,55,0.6);margin-bottom:6px">⚠️ AI may misread handwriting — fix any wrong words before assessing</div>
+</div>""", unsafe_allow_html=True)
+
+                corrected_writing = st.text_area(
+                    "✏️ Review & correct the extracted text:",
+                    value=extracted_writing,
+                    height=200,
+                    key="corrected_writing",
+                    help="The AI read this from the image. Fix any mistakes before clicking Assess.",
+                    placeholder="Arabic text will appear here after OCR..."
+                )
+                writing = corrected_writing if corrected_writing.strip() else extracted_writing
+
+                if corrected_writing.strip() != extracted_writing.strip():
+                    st.success("✅ Using your corrected version")
+                else:
+                    st.info("👆 You can edit the text above if any words were misread")
 
     if writing.strip():
         word_count = len(writing.split())
@@ -1612,7 +1631,7 @@ if assess_btn:
 
 </div>"""
 
-                st.markdown(html_report, unsafe_allow_html=True)
+                components.html(html_report, height=1400, scrolling=True)
 
                 # Download as formatted text
                 txt_lines = [f"FEEDBACK FOR {name.upper()} — Year {year}\n{'='*50}"]
