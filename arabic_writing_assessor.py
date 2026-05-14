@@ -385,7 +385,7 @@ TEACHER STYLE EXAMPLE:
 YOUR FEEDBACK MUST:
 1. Be written in English
 2. Use ★ bullet points for WWW (green stars — what went well)
-3. Use ↗ for EBI (red arrow) — start each EBI point with "Even better if you use..." or "Even better if you..."
+3. Use ↗ for EBI (red arrow) — EBI MUST come from unmet Success Criteria ONLY. Start each point with "Even better if you use..." or "Even better if you..."
 4. Be SHORT and punchy — no long paragraphs, just clear bullet points
 5. List spelling mistakes clearly as: [wrong] → [correct]
 6. Be appropriate for Year {year} student ({year} years of Arabic) — keep language simple and encouraging
@@ -416,7 +416,7 @@ OUTPUT — return ONLY this JSON and nothing else (no markdown, no explanation):
 
 RULES:
 - www: 2-3 specific strengths referencing actual words/sentences the student wrote
-- ebi: 1-2 improvements MAX — MUST start each one with "Even better if you use..." or "Even better if you..." — pick the most important only, keep it kind and specific
+- ebi: CRITICAL RULE — EBI points MUST come DIRECTLY from the Success Criteria that the student did NOT meet (met: false in sc_check). Do NOT invent new suggestions. If the student met all criteria, pick the weakest one (lowest quality) and suggest improvement. Start each EBI with "Even better if you use..." or "Even better if you..." — maximum 2 points, keep it kind and specific and realistic for their year level
 - spelling: list EVERY spelling mistake found — if none write []
 - grammar: list grammar issues with a HINT not the answer — so student discovers it themselves
 - sc_check: only if success criteria provided
