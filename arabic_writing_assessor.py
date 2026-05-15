@@ -1494,9 +1494,9 @@ if assess_btn:
                 if spelling:
                     spell_rows = "".join([f"""
                     <tr>
-                      <td style="padding:10px 18px;font-size:17px;color:#8b0000;text-decoration:line-through;font-family:'Amiri',serif;direction:rtl">{s.get('wrong','')}</td>
+                      <td style="padding:10px 18px;font-size:17px;color:#ff8a80;text-decoration:line-through;font-family:'Amiri',serif;direction:rtl">{s.get('wrong','')}</td>
                       <td style="padding:10px 18px;font-size:22px;color:#555">→</td>
-                      <td style="padding:10px 18px;font-size:17px;color:#155724;font-weight:700;font-family:'Amiri',serif;direction:rtl">{s.get('correct','')}</td>
+                      <td style="padding:10px 18px;font-size:17px;color:#b9f6ca;font-weight:700;font-family:'Amiri',serif;direction:rtl">{s.get('correct','')}</td>
                     </tr>""" for s in spelling])
                     spelling_section = f"""
                     <div style="margin-top:28px">
@@ -1504,9 +1504,9 @@ if assess_btn:
                       <table style="width:100%;border-collapse:collapse;background:rgba(139,0,0,0.04);border-radius:14px;overflow:hidden;border:1px solid rgba(139,0,0,0.15)">
                         <thead>
                           <tr style="background:rgba(139,0,0,0.08)">
-                            <th style="padding:10px 18px;font-size:13px;color:#8b0000;text-align:left;font-weight:700;letter-spacing:2px">WRITTEN</th>
+                            <th style="padding:10px 18px;font-size:13px;color:#ff8a80;text-align:left;font-weight:700;letter-spacing:2px">WRITTEN</th>
                             <th style="padding:10px 18px"></th>
-                            <th style="padding:10px 18px;font-size:13px;color:#155724;text-align:left;font-weight:700;letter-spacing:2px">CORRECT</th>
+                            <th style="padding:10px 18px;font-size:13px;color:#b9f6ca;text-align:left;font-weight:700;letter-spacing:2px">CORRECT</th>
                           </tr>
                         </thead>
                         <tbody>{spell_rows}</tbody>
@@ -1523,14 +1523,14 @@ if assess_btn:
                 if grammar:
                     gram_rows = "".join([f"""
                     <tr style="border-bottom:1px solid rgba(212,175,55,0.1)">
-                      <td style="padding:14px 18px;font-size:16px;font-family:'Amiri',serif;direction:rtl;color:#7a5c00;font-style:italic">"{g.get('original','')}"</td>
-                      <td style="padding:14px 18px;font-size:15px;color:#5a4000">{g.get('issue','')}</td>
+                      <td style="padding:14px 18px;font-size:17px;font-family:'Amiri',serif;direction:rtl;color:#7a5c00;font-style:italic">"{g.get('original','')}"</td>
+                      <td style="padding:14px 18px;font-size:15px;color:#ffffff">{g.get('issue','')}</td>
                       <td style="padding:14px 18px;font-size:15px;color:#d4af37;font-style:italic">💡 {g.get('hint','')}</td>
                     </tr>""" for g in grammar])
                     grammar_section = f"""
                     <div style="margin-top:28px">
                       <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#d4af37;letter-spacing:3px;margin-bottom:12px">📐 GRAMMAR NOTES</div>
-                      <table style="width:100%;border-collapse:collapse;background:rgba(212,175,55,0.04);border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,0.2)">
+                      <table style="width:100%;border-collapse:collapse;background:rgba(212,175,55,0.08);border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,0.2)">
                         <thead>
                           <tr style="background:rgba(212,175,55,0.1)">
                             <th style="padding:10px 18px;font-size:13px;color:#7a5c00;text-align:left;font-weight:700;letter-spacing:2px;width:33%">WHAT YOU WROTE</th>
@@ -1547,9 +1547,9 @@ if assess_btn:
                 if sc_check:
                     sc_rows = "".join([f"""
                     <tr style="border-bottom:1px solid rgba(212,175,55,0.08)">
-                      <td style="padding:12px 18px;font-size:16px;color:#ede0c8">{s.get('criterion','')}</td>
+                      <td style="padding:12px 18px;font-size:17px;color:#ffffff">{s.get('criterion','')}</td>
                       <td style="padding:12px 18px;font-size:20px;text-align:center">{"✅" if s.get('met') else "❌"}</td>
-                      <td style="padding:12px 18px;font-size:15px;color:rgba(220,205,185,0.7)">{s.get('comment','')}</td>
+                      <td style="padding:12px 18px;font-size:15px;color:rgba(255,255,255,0.85)">{s.get('comment','')}</td>
                     </tr>""" for s in sc_check])
                     sc_section = f"""
                     <div style="margin-top:28px">
@@ -1580,7 +1580,7 @@ if assess_btn:
                 html_report = f"""
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cinzel+Decorative:wght@700&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <div style="
-  background:linear-gradient(160deg,rgba(22,8,45,0.98),rgba(15,8,30,0.98));
+  background:linear-gradient(160deg,rgba(30,20,50,1),rgba(20,15,40,1));
   border:1px solid rgba(212,175,55,0.4);
   border-radius:24px;
   padding:36px 32px;
@@ -1593,7 +1593,7 @@ if assess_btn:
   <!-- Header -->
   <div style="text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid rgba(212,175,55,0.2)">
     <div style="font-family:'Cinzel Decorative',serif;font-size:11px;color:rgba(212,175,55,0.5);letter-spacing:6px;margin-bottom:8px">ARABIC WRITING ASSESSMENT</div>
-    <div style="font-family:'Amiri',serif;font-size:32px;color:#d4af37;font-weight:700">{first_name}</div>
+    <div style="font-family:'Amiri',serif;font-size:36px;color:#d4af37;font-weight:700;font-weight:700">{first_name}</div>
     <div style="font-size:13px;color:rgba(212,175,55,0.5);margin-top:4px;letter-spacing:2px">YEAR {year} &nbsp;·&nbsp; {year} YEARS OF ARABIC</div>
   </div>
 
@@ -1601,7 +1601,7 @@ if assess_btn:
   <div style="margin-bottom:24px">
     <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#4caf50;letter-spacing:4px;margin-bottom:12px">★ WHAT WENT WELL</div>
     <table style="width:100%;border-collapse:collapse;background:rgba(21,87,36,0.1);border-radius:16px;overflow:hidden;border:1px solid rgba(76,175,80,0.3)">
-      <tbody style="color:#c8e6c9">{www_rows}</tbody>
+      <tbody>{www_rows}</tbody>
     </table>
   </div>
 
@@ -1609,7 +1609,7 @@ if assess_btn:
   <div style="margin-bottom:8px">
     <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#ef5350;letter-spacing:4px;margin-bottom:12px">↗ EVEN BETTER IF YOU...</div>
     <table style="width:100%;border-collapse:collapse;background:rgba(139,0,0,0.1);border-radius:16px;overflow:hidden;border:1px solid rgba(239,83,80,0.3)">
-      <tbody style="color:#ffcdd2">{ebi_rows}</tbody>
+      <tbody>{ebi_rows}</tbody>
     </table>
   </div>
 
@@ -1625,7 +1625,7 @@ if assess_btn:
     </div>
     <div style="flex:1">
       <div style="display:inline-block;background:{lvl_color};color:white;font-size:12px;font-weight:700;letter-spacing:3px;padding:4px 16px;border-radius:20px;margin-bottom:8px">{lvl.upper()}</div>
-      <div style="font-size:15px;color:rgba(220,205,185,0.8);line-height:1.6">{score.get('reason','')}</div>
+      <div style="font-size:16px;color:#ffffff;line-height:1.6">{score.get('reason','')}</div>
     </div>
   </div>
 
