@@ -1394,13 +1394,13 @@ with col_right:
                 extracted_writing = "\n".join(all_extracted)
 
                 st.markdown("""
-<div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.35);border-radius:14px;padding:14px 18px;margin:10px 0">
-<div style="font-size:12px;color:#d4af37;letter-spacing:2px;font-weight:700;margin-bottom:8px">📝 OCR READ THIS — PLEASE CHECK & CORRECT IF NEEDED</div>
-<div style="font-size:11px;color:rgba(212,175,55,0.6);margin-bottom:6px">⚠️ AI may misread handwriting — fix any wrong words before assessing</div>
+<div style="background:rgba(212,175,55,0.18);border:2px solid #d4af37;border-radius:14px;padding:16px 20px;margin:10px 0">
+<div style="font-size:15px;color:#ffd54f;letter-spacing:2px;font-weight:900;margin-bottom:10px">📝 OCR READ THIS — PLEASE CHECK & CORRECT IF NEEDED</div>
+<div style="font-size:14px;color:#ffffff;margin-bottom:6px;line-height:1.5">⚠️ AI may misread handwriting — fix any wrong words before assessing</div>
 </div>""", unsafe_allow_html=True)
 
                 corrected_writing = st.text_area(
-                    "✏️ Review & correct the extracted text:",
+                    "✏️ Review & correct the extracted text (white text on dark background is editable):",
                     value=extracted_writing,
                     height=200,
                     key="corrected_writing",
