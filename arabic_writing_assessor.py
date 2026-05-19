@@ -418,7 +418,13 @@ OUTPUT — return ONLY this JSON and nothing else (no markdown, no explanation):
 RULES:
 - www: 2-3 specific strengths referencing actual words/sentences the student wrote
 - ebi: CRITICAL RULE — EBI points MUST come DIRECTLY from the Success Criteria that the student did NOT meet (met: false in sc_check). Do NOT invent new suggestions. If the student met all criteria, pick the weakest one (lowest quality) and suggest improvement. Start each EBI with "Even better if you use..." or "Even better if you..." — maximum 2 points, keep it kind and specific and realistic for their year level
-- spelling: list EVERY spelling mistake found — if none write []
+- spelling: FOCUS ON COMMON NON-NATIVE MISTAKES ONLY. Check for:
+  * Extra/missing short vowels (مدود زائدة): أأ instead of أ, يي instead of ي, وو instead of و
+  * Dots: ب/ت/ث, ج/ح/خ, د/ذ, ر/ز, س/ش, ص/ض, ط/ظ, ع/غ, ف/ق
+  * ة vs ه at end of words (تاء مربوطة)
+  * Hamza errors: أ/إ/آ/ء/ؤ/ئ
+  * ى vs ي at end of words (alif maqsura)
+  ONLY flag actual mistakes. Do NOT flag correct words. If unsure, skip it.
 - grammar: list grammar issues with a HINT not the answer — so student discovers it themselves
 - sc_check: only if success criteria provided
 - score: based on rubric for {rubric_key} years of study
@@ -613,19 +619,22 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
 
     api_key = get_google_api_key()
     prompt = (
-        "You are an expert Arabic handwriting transcription specialist. "
-        "This image contains handwritten Arabic text written by a student learner. "
-        "Your task is to transcribe every single Arabic word EXACTLY as the student wrote it — "
-        "letter by letter, stroke by stroke. "
-        "CRITICAL RULES: "
-        "1. Do NOT correct spelling mistakes — if a student wrote a word wrong, keep it wrong. "
-        "2. Pay very close attention to similar-looking letters: "
-        "   ع vs غ, ح vs خ vs ج, ر vs ز, د vs ذ, س vs ش, ص vs ض, ط vs ظ, ه vs ة, ي vs ى vs ئ, و vs ؤ, ا vs إ vs أ vs آ. "
-        "3. Look carefully at dots — a letter with one dot vs two dots vs three dots can be completely different. "
-        "4. Read the full word in context before writing it — Arabic letters connect differently. "
-        "5. Do NOT add any vowel marks (tashkeel) unless clearly written by the student. "
-        "6. Do NOT add punctuation that is not there. "
-        "7. Return ONLY the transcribed Arabic text, line by line as written. Nothing else."
+        "You are an expert Arabic handwriting OCR specialist trained to read non-native student handwriting. "
+        "CONTEXT: This is written by a NON-NATIVE Arabic learner whose handwriting may be unclear or messy. "
+        "Your job: transcribe EXACTLY what you see, even if unclear or wrong. "
+        "\n"
+        "CRITICAL RULES:\n"
+        "1. Non-native students often have POOR handwriting — do your best to read unclear letters\n"
+        "2. When a letter is UNCLEAR, use context clues from surrounding letters to guess the most likely letter\n"
+        "3. Common issues to watch for in non-native writing:\n"
+        "   - Dots in wrong places (ب/ت/ث confused, ج/ح/خ confused, etc)\n"
+        "   - ة written like ه and vice versa at word endings\n"
+        "   - ي vs ى confusion at word endings\n"
+        "   - Hamza mistakes (أ/إ/آ/ء all look similar in bad handwriting)\n"
+        "   - Extra or missing connecting strokes\n"
+        "4. Do NOT correct mistakes — write what you see even if misspelled\n"
+        "5. Do NOT add tashkeel/vowel marks unless clearly visible\n"
+        "6. Return ONLY Arabic text, line by line. No English, no explanations."
     )
 
     # Auto-discover available models, fallback to known list
@@ -651,6 +660,94 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
             all_text.append(page_text)
         else:
             raise RuntimeError(f"All OCR models failed. Last error: {last_error}")
+
+def smart_spelling_fix(text: str, word_bank: str = "") -> tuple[str, list]:
+    """
+    Intelligently correct common non-native Arabic learner mistakes.
+    Returns (corrected_text, list_of_changes)
+    """
+    import re
+    changes = []
+    original = text
+    
+    # Build dictionary from word bank
+    known_words = set()
+    if word_bank.strip():
+        for line in word_bank.strip().split('\n'):
+            for word in line.replace(',', ' ').split():
+                word = word.strip()
+                if word and len(word) > 1:
+                    known_words.add(word)
+    
+    # Common non-native mistakes patterns
+    fixes = {
+        # Extra shadda/tashkeel noise
+        'ّّ': 'ّ',
+        'ًً': 'ً',
+        '  ': ' ',
+        
+        # Common dot confusion for non-natives
+        'بى': 'بي',  # ى vs ي at end after ب
+        'تى': 'تي',
+        'نى': 'ني',
+        
+        # Taa marbouta vs haa
+        'ه ': 'ة ',  # haa at end of word before space (likely should be taa marbouta)
+        
+        # Hamza basics
+        'أأ': 'أ',
+        'إإ': 'إ',
+    }
+    
+    for wrong, right in fixes.items():
+        if wrong in text:
+            text = text.replace(wrong, right)
+            if wrong != right:
+                changes.append({"wrong": wrong, "correct": right, "type": "auto"})
+    
+    # If word bank provided, check each word
+    if known_words:
+        words = text.split()
+        corrected_words = []
+        for word in words:
+            clean_word = word.strip('،؛.:!?""()[]')
+            if clean_word and len(clean_word) > 2:
+                # Check if it's close to any known word (1-2 char difference)
+                best_match = None
+                min_diff = 999
+                for known in known_words:
+                    diff = levenshtein_distance(clean_word, known)
+                    if diff < min_diff and diff <= 2:
+                        min_diff = diff
+                        best_match = known
+                
+                if best_match and best_match != clean_word:
+                    changes.append({"wrong": clean_word, "correct": best_match, "type": "wordbank"})
+                    word = word.replace(clean_word, best_match)
+            
+            corrected_words.append(word)
+        text = ' '.join(corrected_words)
+    
+    return text, changes
+
+
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """Calculate edit distance between two strings."""
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    return previous_row[-1]
+
 
     result = "\n".join(all_text)
     cache[file_hash] = result   # 💾 Save to cache
@@ -1392,27 +1489,39 @@ with col_right:
                         st.error(f"❌ Could not read file {i+1}: {str(e)}")
             if all_extracted:
                 extracted_writing = "\n".join(all_extracted)
+                
+                # Apply smart spell-check if word bank provided
+                auto_corrected = extracted_writing
+                auto_changes = []
+                if word_bank_text.strip():
+                    auto_corrected, auto_changes = smart_spelling_fix(extracted_writing, word_bank_text)
 
                 st.markdown("""
-<div style="background:rgba(212,175,55,0.18);border:2px solid #d4af37;border-radius:14px;padding:16px 20px;margin:10px 0">
-<div style="font-size:15px;color:#ffd54f;letter-spacing:2px;font-weight:900;margin-bottom:10px">📝 OCR READ THIS — PLEASE CHECK & CORRECT IF NEEDED</div>
-<div style="font-size:14px;color:#ffffff;margin-bottom:6px;line-height:1.5">⚠️ AI may misread handwriting — fix any wrong words before assessing</div>
+<div style="background:linear-gradient(135deg,rgba(212,175,55,0.25),rgba(212,175,55,0.15));border:2px solid #d4af37;border-radius:16px;padding:18px 22px;margin:12px 0;box-shadow:0 4px 12px rgba(212,175,55,0.2)">
+<div style="font-size:16px;color:#ffd54f;letter-spacing:2px;font-weight:900;margin-bottom:10px">📝 OCR EXTRACTED TEXT — PLEASE REVIEW</div>
+<div style="font-size:14px;color:#ffffff;line-height:1.6">⚠️ AI read the handwriting below. Check it carefully and fix any mistakes before clicking <strong>Assess Writing</strong>.</div>
 </div>""", unsafe_allow_html=True)
 
-                corrected_writing = st.text_area(
-                    "✏️ Review & correct the extracted text (white text on dark background is editable):",
-                    value=extracted_writing,
-                    height=200,
-                    key="corrected_writing",
-                    help="The AI read this from the image. Fix any mistakes before clicking Assess.",
-                    placeholder="Arabic text will appear here after OCR..."
-                )
-                writing = corrected_writing if corrected_writing.strip() else extracted_writing
+                if auto_changes:
+                    with st.expander(f"🔧 Auto-corrected {len(auto_changes)} common mistakes using word bank"):
+                        for change in auto_changes[:10]:
+                            st.markdown(f"- `{change['wrong']}` → `{change['correct']}`")
 
-                if corrected_writing.strip() != extracted_writing.strip():
-                    st.success("✅ Using your corrected version")
-                else:
-                    st.info("👆 You can edit the text above if any words were misread")
+                corrected_writing = st.text_area(
+                    "✏️ Review & correct the extracted text:",
+                    value=auto_corrected,
+                    height=220,
+                    key="corrected_writing",
+                    help="OCR result with auto-corrections applied. You can edit any remaining mistakes.",
+                    placeholder="Arabic text will appear here after OCR...",
+                    label_visibility="visible"
+                )
+                writing = corrected_writing if corrected_writing.strip() else auto_corrected
+
+                if corrected_writing.strip() != auto_corrected.strip():
+                    st.success("✅ Using your manually corrected version")
+                elif auto_changes:
+                    st.info(f"💡 Auto-applied {len(auto_changes)} corrections from word bank")
 
     if writing.strip():
         word_count = len(writing.split())
@@ -1500,11 +1609,11 @@ if assess_btn:
                     </tr>""" for s in spelling])
                     spelling_section = f"""
                     <div style="margin-top:28px">
-                      <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#d4af37;letter-spacing:3px;margin-bottom:12px">✏️ SPELLING CORRECTIONS</div>
+                      <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#6a1b9a;font-weight:700;letter-spacing:3px;margin-bottom:12px">✏️ SPELLING CORRECTIONS</div>
                       <table style="width:100%;border-collapse:collapse;background:rgba(139,0,0,0.04);border-radius:14px;overflow:hidden;border:1px solid rgba(139,0,0,0.15)">
                         <thead>
                           <tr style="background:rgba(139,0,0,0.08)">
-                            <th style="padding:10px 18px;font-size:13px;color:#ff8a80;text-align:left;font-weight:700;letter-spacing:2px">WRITTEN</th>
+                            <th style="padding:10px 18px;font-size:14px;color:#c62828;text-align:left;font-weight:700;letter-spacing:2px">WRITTEN</th>
                             <th style="padding:10px 18px"></th>
                             <th style="padding:10px 18px;font-size:13px;color:#b9f6ca;text-align:left;font-weight:700;letter-spacing:2px">CORRECT</th>
                           </tr>
@@ -1514,7 +1623,7 @@ if assess_btn:
                     </div>"""
                 else:
                     spelling_section = """
-                    <div style="margin-top:28px;padding:14px 18px;background:rgba(21,87,36,0.08);border-radius:12px;border:1px solid rgba(21,87,36,0.2);font-size:16px;color:#155724">
+                    <div style="margin-top:28px;padding:16px 20px;background:#e8f5e9;border-radius:14px;border:2px solid #4caf50;font-size:17px;color:#2e7d32;font-weight:600">
                       🎉 Great job — no spelling errors found!
                     </div>"""
 
@@ -1524,18 +1633,18 @@ if assess_btn:
                     gram_rows = "".join([f"""
                     <tr style="border-bottom:1px solid rgba(212,175,55,0.1)">
                       <td style="padding:14px 18px;font-size:17px;font-family:'Amiri',serif;direction:rtl;color:#7a5c00;font-style:italic">"{g.get('original','')}"</td>
-                      <td style="padding:14px 18px;font-size:15px;color:#ffffff">{g.get('issue','')}</td>
+                      <td style="padding:14px 18px;font-size:15px;color:#3e2723">{g.get('issue','')}</td>
                       <td style="padding:14px 18px;font-size:15px;color:#d4af37;font-style:italic">💡 {g.get('hint','')}</td>
                     </tr>""" for g in grammar])
                     grammar_section = f"""
                     <div style="margin-top:28px">
-                      <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#d4af37;letter-spacing:3px;margin-bottom:12px">📐 GRAMMAR NOTES</div>
-                      <table style="width:100%;border-collapse:collapse;background:rgba(212,175,55,0.08);border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,0.2)">
+                      <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#6a1b9a;font-weight:700;letter-spacing:3px;margin-bottom:12px">📐 GRAMMAR NOTES</div>
+                      <table style="width:100%;border-collapse:collapse;background:rgba(156,39,176,0.15);border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,0.2)">
                         <thead>
-                          <tr style="background:rgba(212,175,55,0.1)">
-                            <th style="padding:10px 18px;font-size:13px;color:#7a5c00;text-align:left;font-weight:700;letter-spacing:2px;width:33%">WHAT YOU WROTE</th>
-                            <th style="padding:10px 18px;font-size:13px;color:#7a5c00;text-align:left;font-weight:700;letter-spacing:2px;width:33%">THE ISSUE</th>
-                            <th style="padding:10px 18px;font-size:13px;color:#7a5c00;text-align:left;font-weight:700;letter-spacing:2px;width:33%">HINT</th>
+                          <tr style="background:rgba(251,192,45,0.2)">
+                            <th style="padding:10px 18px;font-size:13px;color:#5a4000;font-weight:700;text-align:left;font-weight:700;letter-spacing:2px;width:33%">WHAT YOU WROTE</th>
+                            <th style="padding:10px 18px;font-size:13px;color:#5a4000;font-weight:700;text-align:left;font-weight:700;letter-spacing:2px;width:33%">THE ISSUE</th>
+                            <th style="padding:10px 18px;font-size:13px;color:#5a4000;font-weight:700;text-align:left;font-weight:700;letter-spacing:2px;width:33%">HINT</th>
                           </tr>
                         </thead>
                         <tbody>{gram_rows}</tbody>
@@ -1547,19 +1656,19 @@ if assess_btn:
                 if sc_check:
                     sc_rows = "".join([f"""
                     <tr style="border-bottom:1px solid rgba(212,175,55,0.08)">
-                      <td style="padding:12px 18px;font-size:17px;color:#ffffff">{s.get('criterion','')}</td>
+                      <td style="padding:12px 18px;font-size:17px;color:#4a148c;font-weight:600">{s.get('criterion','')}</td>
                       <td style="padding:12px 18px;font-size:20px;text-align:center">{"✅" if s.get('met') else "❌"}</td>
-                      <td style="padding:12px 18px;font-size:15px;color:rgba(255,255,255,0.85)">{s.get('comment','')}</td>
+                      <td style="padding:12px 18px;font-size:15px;color:#5a4000">{s.get('comment','')}</td>
                     </tr>""" for s in sc_check])
                     sc_section = f"""
                     <div style="margin-top:28px">
-                      <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#d4af37;letter-spacing:3px;margin-bottom:12px">🎯 SUCCESS CRITERIA</div>
+                      <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#6a1b9a;font-weight:700;letter-spacing:3px;margin-bottom:12px">🎯 SUCCESS CRITERIA</div>
                       <table style="width:100%;border-collapse:collapse;background:rgba(255,255,255,0.03);border-radius:14px;overflow:hidden;border:1px solid rgba(212,175,55,0.15)">
                         <thead>
-                          <tr style="background:rgba(212,175,55,0.08)">
-                            <th style="padding:10px 18px;font-size:13px;color:#d4af37;text-align:left;font-weight:700;letter-spacing:2px">CRITERION</th>
-                            <th style="padding:10px 18px;font-size:13px;color:#d4af37;text-align:center;font-weight:700;letter-spacing:2px;width:80px">MET?</th>
-                            <th style="padding:10px 18px;font-size:13px;color:#d4af37;text-align:left;font-weight:700;letter-spacing:2px">COMMENT</th>
+                          <tr style="background:rgba(156,39,176,0.15)">
+                            <th style="padding:10px 18px;font-size:13px;color:#6a1b9a;font-weight:700;text-align:left;font-weight:700;letter-spacing:2px">CRITERION</th>
+                            <th style="padding:10px 18px;font-size:13px;color:#6a1b9a;font-weight:700;text-align:center;font-weight:700;letter-spacing:2px;width:80px">MET?</th>
+                            <th style="padding:10px 18px;font-size:13px;color:#6a1b9a;font-weight:700;text-align:left;font-weight:700;letter-spacing:2px">COMMENT</th>
                           </tr>
                         </thead>
                         <tbody>{sc_rows}</tbody>
@@ -1580,35 +1689,35 @@ if assess_btn:
                 html_report = f"""
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cinzel+Decorative:wght@700&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <div style="
-  background:linear-gradient(160deg,rgba(30,20,50,1),rgba(20,15,40,1));
-  border:1px solid rgba(212,175,55,0.4);
+  background:linear-gradient(135deg,#ffffff 0%,#faf8f5 100%);
+  border:2px solid #e0d5c7;
   border-radius:24px;
   padding:36px 32px;
   margin-top:20px;
   font-family:'Tajawal',sans-serif;
-  box-shadow:0 30px 80px rgba(0,0,0,0.6),inset 0 1px 0 rgba(212,175,55,0.2);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1),inset 0 1px 0 rgba(212,175,55,0.2);
   position:relative;
 ">
 
   <!-- Header -->
-  <div style="text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid rgba(212,175,55,0.2)">
-    <div style="font-family:'Cinzel Decorative',serif;font-size:11px;color:rgba(212,175,55,0.5);letter-spacing:6px;margin-bottom:8px">ARABIC WRITING ASSESSMENT</div>
-    <div style="font-family:'Amiri',serif;font-size:36px;color:#d4af37;font-weight:700;font-weight:700">{first_name}</div>
-    <div style="font-size:13px;color:rgba(212,175,55,0.5);margin-top:4px;letter-spacing:2px">YEAR {year} &nbsp;·&nbsp; {year} YEARS OF ARABIC</div>
+  <div style="text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:3px solid #d4af37">
+    <div style="font-family:'Cinzel Decorative',serif;font-size:12px;color:#b8941f;letter-spacing:7px;font-weight:700;margin-bottom:8px">ARABIC WRITING ASSESSMENT</div>
+    <div style="font-family:'Amiri',serif;font-size:42px;color:#2c1810;font-weight:700">{first_name}</div>
+    <div style="font-size:14px;color:#5a4000;font-weight:600;margin-top:4px;letter-spacing:2px">YEAR {year} &nbsp;·&nbsp; {year} YEARS OF ARABIC</div>
   </div>
 
   <!-- WWW Table -->
   <div style="margin-bottom:24px">
-    <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#4caf50;letter-spacing:4px;margin-bottom:12px">★ WHAT WENT WELL</div>
-    <table style="width:100%;border-collapse:collapse;background:rgba(21,87,36,0.1);border-radius:16px;overflow:hidden;border:1px solid rgba(76,175,80,0.3)">
+    <div style="font-family:'Cinzel Decorative',serif;font-size:14px;color:#2e7d32;letter-spacing:5px;font-weight:700;margin-bottom:12px">★ WHAT WENT WELL</div>
+    <table style="width:100%;border-collapse:collapse;background:#e8f5e9;border-radius:14px;overflow:hidden;border:2px solid #4caf50">
       <tbody>{www_rows}</tbody>
     </table>
   </div>
 
   <!-- EBI Table -->
   <div style="margin-bottom:8px">
-    <div style="font-family:'Cinzel Decorative',serif;font-size:13px;color:#ef5350;letter-spacing:4px;margin-bottom:12px">↗ EVEN BETTER IF YOU...</div>
-    <table style="width:100%;border-collapse:collapse;background:rgba(139,0,0,0.1);border-radius:16px;overflow:hidden;border:1px solid rgba(239,83,80,0.3)">
+    <div style="font-family:'Cinzel Decorative',serif;font-size:14px;color:#c62828;letter-spacing:5px;font-weight:700;margin-bottom:12px">↗ EVEN BETTER IF YOU...</div>
+    <table style="width:100%;border-collapse:collapse;background:#ffebee;border-radius:14px;overflow:hidden;border:2px solid #e57373">
       <tbody>{ebi_rows}</tbody>
     </table>
   </div>
@@ -1620,12 +1729,12 @@ if assess_btn:
   <!-- Score Badge -->
   <div style="margin-top:32px;padding:20px 24px;background:rgba(212,175,55,0.06);border-radius:16px;border:1px solid rgba(212,175,55,0.25);display:flex;align-items:center;gap:24px;flex-wrap:wrap">
     <div style="text-align:center;min-width:100px">
-      <div style="font-size:42px;font-weight:900;color:#d4af37;line-height:1">{score.get('score','?')}<span style="font-size:20px;color:rgba(212,175,55,0.5)">/{score.get('out_of',15)}</span></div>
-      <div style="font-size:11px;color:rgba(212,175,55,0.5);letter-spacing:2px;margin-top:4px">SCORE</div>
+      <div style="font-size:48px;font-weight:900;color:#b8941f;line-height:1">{score.get('score','?')}<span style="font-size:20px;color:rgba(212,175,55,0.5)">/{score.get('out_of',15)}</span></div>
+      <div style="font-size:12px;color:#b8941f;font-weight:700;letter-spacing:2px;margin-top:4px">SCORE</div>
     </div>
     <div style="flex:1">
       <div style="display:inline-block;background:{lvl_color};color:white;font-size:12px;font-weight:700;letter-spacing:3px;padding:4px 16px;border-radius:20px;margin-bottom:8px">{lvl.upper()}</div>
-      <div style="font-size:16px;color:#ffffff;line-height:1.6">{score.get('reason','')}</div>
+      <div style="font-size:17px;color:#2c1810;font-weight:600;line-height:1.6">{score.get('reason','')}</div>
     </div>
   </div>
 
