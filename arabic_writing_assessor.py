@@ -619,7 +619,6 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
 
     api_key = get_google_api_key()
     
-    # ENHANCED PROMPT for poor handwriting
     prompt = """
 You are an EXPERT Arabic handwriting OCR specialist trained specifically for NON-NATIVE student handwriting.
 
@@ -650,10 +649,6 @@ ENHANCED READING STRATEGIES FOR POOR HANDWRITING:
    - If a word is UNCLEAR, guess the most likely Arabic word that fits
    - Use common beginner vocabulary as hints
    - If you see something that looks like gibberish, try to find the closest real Arabic word
-   - Examples:
-     * "انة" might be "أنا" (I)
-     * "ذهبة" might be "ذهبت" (I went)
-     * "مدرصة" might be "مدرسة" (school)
 
 3. SPELLING MISTAKES TO PRESERVE:
    - Keep ة vs ه confusion at word endings
@@ -675,10 +670,6 @@ ENHANCED READING STRATEGIES FOR POOR HANDWRITING:
    - NO tashkeel unless clearly visible
    - NO corrections (preserve mistakes)
    - NO comments or notes
-
-EXAMPLE TRANSFORMATIONS (messy → OCR output):
-Messy: "انة ذهبة إلي المدرصة" → Output: "انا ذهبة إلي المدرصة"
-Messy: unclear blob → Output: [best guess based on context]
 
 READ THE IMAGE NOW and transcribe the Arabic text:
 """
@@ -719,7 +710,6 @@ def smart_spelling_matcher(writing: str, word_bank: str) -> list:
     if not word_bank.strip():
         return []
     
-    # Build word bank list
     known_words = set()
     for line in word_bank.strip().split('\n'):
         for word in line.replace(',', ' ').split():
@@ -730,7 +720,6 @@ def smart_spelling_matcher(writing: str, word_bank: str) -> list:
     if not known_words:
         return []
     
-    # Extract words from writing
     writing_words = []
     for line in writing.split('\n'):
         for word in line.split():
@@ -738,19 +727,15 @@ def smart_spelling_matcher(writing: str, word_bank: str) -> list:
             if clean and len(clean) > 1:
                 writing_words.append(clean)
     
-    # Find potential corrections
     corrections = []
     for written_word in writing_words:
-        # Skip if already in word bank
         if written_word in known_words:
             continue
         
-        # Find closest match
         best_match = None
         min_distance = 999
         for known_word in known_words:
             distance = levenshtein_distance(written_word, known_word)
-            # Only suggest if within 2 character edits and similar length
             if distance < min_distance and distance <= 2 and abs(len(written_word) - len(known_word)) <= 2:
                 min_distance = distance
                 best_match = known_word
@@ -764,7 +749,6 @@ def smart_spelling_matcher(writing: str, word_bank: str) -> list:
                 "distance": min_distance
             })
     
-    # Sort by priority and distance, limit to top 7
     corrections.sort(key=lambda x: (x["priority"] == "medium", x["distance"]))
     return corrections[:7]
 
@@ -850,7 +834,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     st.divider()
 
-# CSS (keeping your existing rich Arabic-inspired design)
+# ── CSS ──
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cinzel+Decorative:wght@700&family=Tajawal:wght@300;400;700;900&display=swap');
@@ -975,6 +959,7 @@ st.markdown("""
         box-shadow: 0 4px 20px rgba(212,175,55,0.08), inset 0 1px 0 rgba(212,175,55,0.1);
     }
 
+    /* ── DEFAULT input/textarea styling ── */
     .stTextInput input, .stTextArea textarea {
         background: rgba(255,255,255,0.04) !important;
         border: 1px solid rgba(212,175,55,0.25) !important;
@@ -993,6 +978,29 @@ st.markdown("""
             0 0 0 2px rgba(212,175,55,0.15),
             0 0 20px rgba(212,175,55,0.1) !important;
         background: rgba(255,255,255,0.06) !important;
+    }
+
+    /* ── DARK TEXT inputs: extracted LO, SC, corrected writing, student name ── */
+    .dark-text-input input,
+    .dark-text-input textarea {
+        background: rgba(255,255,255,0.96) !important;
+        color: #000000 !important;
+        font-family: Calibri, 'Calibri', 'Gill Sans', sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        border: 1px solid rgba(212,175,55,0.5) !important;
+        border-radius: 12px !important;
+        box-shadow: inset 0 2px 6px rgba(0,0,0,0.08) !important;
+    }
+
+    .dark-text-input input:focus,
+    .dark-text-input textarea:focus {
+        border-color: #d4af37 !important;
+        box-shadow:
+            inset 0 2px 6px rgba(0,0,0,0.08),
+            0 0 0 2px rgba(212,175,55,0.25) !important;
+        background: #ffffff !important;
+        color: #000000 !important;
     }
 
     .stButton > button {
@@ -1103,40 +1111,18 @@ st.markdown("""
     footer { visibility: hidden; }
     [data-testid="stToolbar"] { display: none; }
 
-    /* A5 Print Report Styles */
     @media print {
-        @page {
-            size: A5;
-            margin: 0;
-        }
-        
-        body * { 
-            visibility: hidden !important;
-            display: none !important;
-        }
-        
-        .print-report, .print-report * { 
-            visibility: visible !important;
-            display: block !important;
-        }
-        
+        @page { size: A5; margin: 0; }
+        body * { visibility: hidden !important; display: none !important; }
+        .print-report, .print-report * { visibility: visible !important; display: block !important; }
         .print-report {
             position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 148mm !important;
-            height: 210mm !important;
-            margin: 0 !important;
-            padding: 10mm !important;
-            box-shadow: none !important;
-            border: none !important;
-            page-break-after: avoid !important;
+            left: 0 !important; top: 0 !important;
+            width: 148mm !important; height: 210mm !important;
+            margin: 0 !important; padding: 10mm !important;
+            box-shadow: none !important; border: none !important;
         }
-        
-        /* Hide print button when printing */
-        .print-report button {
-            display: none !important;
-        }
+        .print-report button { display: none !important; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1160,7 +1146,10 @@ col_left, col_right = st.columns([1, 1], gap="large")
 with col_left:
     st.markdown('<div class="section-title">🌙 Student Profile</div>', unsafe_allow_html=True)
 
+    # ── Student Name — dark text input ──
+    st.markdown('<div class="dark-text-input">', unsafe_allow_html=True)
     name = st.text_input("Student Name", placeholder="e.g. Sara Ahmed")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     year = st.slider(
         "Years of Learning Arabic",
@@ -1192,7 +1181,10 @@ with col_left:
                 if lo_extracted:
                     st.success("✅ LO extracted from image")
                     lo_text = lo_extracted
+                    # ── Extracted LO — dark text ──
+                    st.markdown('<div class="dark-text-input">', unsafe_allow_html=True)
                     st.text_area("Extracted LO (edit if needed):", value=lo_extracted, height=80, key="lo_preview")
+                    st.markdown('</div>', unsafe_allow_html=True)
                 else:
                     st.warning("⚠️ Could not extract text from file")
             except Exception as e:
@@ -1214,7 +1206,10 @@ with col_left:
                 if sc_extracted:
                     st.success("✅ Success Criteria extracted from image")
                     sc_text = sc_extracted
+                    # ── Extracted SC — dark text ──
+                    st.markdown('<div class="dark-text-input">', unsafe_allow_html=True)
                     st.text_area("Extracted SC (edit if needed):", value=sc_extracted, height=80, key="sc_preview")
+                    st.markdown('</div>', unsafe_allow_html=True)
                 else:
                     st.warning("⚠️ Could not extract text from file")
             except Exception as e:
@@ -1322,7 +1317,6 @@ with col_right:
             if all_extracted:
                 extracted_writing = "\n".join(all_extracted)
                 
-                # Smart spelling correction using word bank
                 auto_corrections = []
                 if word_bank_text.strip():
                     auto_corrections = smart_spelling_matcher(extracted_writing, word_bank_text)
@@ -1339,6 +1333,8 @@ with col_right:
                             priority_emoji = "🔴" if corr["priority"] == "high" else "🟡"
                             st.markdown(f"{priority_emoji} `{corr['wrong']}` → `{corr['correct']}`")
 
+                # ── Review & Correct text area — dark text ──
+                st.markdown('<div class="dark-text-input">', unsafe_allow_html=True)
                 corrected_writing = st.text_area(
                     "✏️ Review & correct the extracted text:",
                     value=extracted_writing,
@@ -1347,6 +1343,8 @@ with col_right:
                     help="OCR result. Review and correct any mistakes.",
                     placeholder="Arabic text will appear here after OCR..."
                 )
+                st.markdown('</div>', unsafe_allow_html=True)
+
                 writing = corrected_writing if corrected_writing.strip() else extracted_writing
 
                 if corrected_writing.strip() != extracted_writing.strip():
@@ -1374,7 +1372,6 @@ with col_right:
     if not rubric_key:
         st.caption("⚠️ No rubric available for the selected year.")
     
-    # Show assessment summary
     if name.strip() and writing.strip() and rubric_key:
         word_count = len(writing.split())
         wb_count = len([w for w in word_bank_text.split('\n') if w.strip()]) if word_bank_text.strip() else 0
@@ -1420,26 +1417,25 @@ if assess_btn:
                 www = data.get("www", [])
                 ebi = data.get("ebi", [])
                 next_steps = data.get("next_steps", [])
-                spelling = data.get("spelling", [])[:7]  # Limit to top 7
+                spelling = data.get("spelling", [])[:7]
                 grammar = data.get("grammar", [])
                 sc_check = data.get("sc_check", [])
                 score = data.get("score", {})
 
                 first_name = name.strip().split()[0] if name.strip() else name
                 
-                # Analyze word bank usage
+                # Word bank usage analysis
                 wb_analysis = ""
                 if word_bank_text.strip():
                     wb_words = set()
                     for line in word_bank_text.strip().split('\n'):
                         for word in line.replace(',', ' ').split():
-                            clean = word.strip()
-                            if clean and len(clean) > 1:
-                                wb_words.add(clean)
+                            clean_w = word.strip()
+                            if clean_w and len(clean_w) > 1:
+                                wb_words.add(clean_w)
                     
                     used_words = []
                     unused_words = []
-                    
                     for wb_word in wb_words:
                         if wb_word in writing:
                             used_words.append(wb_word)
@@ -1459,7 +1455,7 @@ if assess_btn:
                         </div>
                         """
 
-                # Build A5 Print-Friendly Report
+                # ── Build A5 report HTML rows ──
                 www_rows = "".join([f"""
                 <tr>
                   <td style="padding:6px 10px;font-size:11px;line-height:1.4;border-bottom:1px solid rgba(76,175,80,0.1)">
@@ -1467,12 +1463,13 @@ if assess_btn:
                   </td>
                 </tr>""" for w in www])
 
+                # ── FIX: was "for w in ebi" — now correctly "for e in ebi" ──
                 ebi_rows = "".join([f"""
                 <tr>
                   <td style="padding:6px 10px;font-size:11px;line-height:1.4;border-bottom:1px solid rgba(229,115,115,0.1)">
                     <span style="color:#c62828;font-weight:700">↗</span> {e}
                   </td>
-                </tr>""" for w in ebi])
+                </tr>""" for e in ebi])
 
                 next_steps_rows = "".join([f"""
                 <tr>
@@ -1512,7 +1509,6 @@ if assess_btn:
                 lvl = score.get("level", "Developing")
                 lvl_color = level_colors.get(lvl, "#5a4000")
 
-                # A5 REPORT (595px x 842px = 148mm x 210mm at 96dpi)
                 html_report = f"""
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <div class="print-report" style="
@@ -1584,11 +1580,9 @@ if assess_btn:
 
 </div>"""
 
-                # Display word bank analysis in the interface
                 if wb_analysis:
                     st.markdown(wb_analysis, unsafe_allow_html=True)
 
-                # Add print button functionality
                 print_button_html = """
                 <div style="text-align:center;margin:20px 0">
                     <button onclick="window.print()" style="
@@ -1615,7 +1609,6 @@ if assess_btn:
                 
                 components.html(html_report + print_button_html, height=1000, scrolling=True)
 
-                # Download as formatted text
                 txt_lines = [
                     f"ARABIC WRITING ASSESSMENT REPORT",
                     f"{'='*60}",
