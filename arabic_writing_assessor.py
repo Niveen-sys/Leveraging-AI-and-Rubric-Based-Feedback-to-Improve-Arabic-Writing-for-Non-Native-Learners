@@ -1178,9 +1178,47 @@ with col_left:
 
     st.markdown('<div class="section-title">🎯 Learning Objective (LO)</div>', unsafe_allow_html=True)
     lo_text = st.text_area("Type the LO here", height=100, placeholder="e.g. Student can write a descriptive paragraph about their daily routine using past tense.")
+    
+    lo_img = st.file_uploader(
+        "📷 Or upload LO as image/PDF",
+        type=["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp", "pdf", "doc", "docx"],
+        key="lo_img",
+        help="Upload a photo or document of the Learning Objective"
+    )
+    if lo_img:
+        with st.spinner("🔍 Reading Learning Objective..."):
+            try:
+                lo_extracted = extract_arabic_from_image_gemini(lo_img)
+                if lo_extracted:
+                    st.success("✅ LO extracted from image")
+                    lo_text = lo_extracted
+                    st.text_area("Extracted LO (edit if needed):", value=lo_extracted, height=80, key="lo_preview")
+                else:
+                    st.warning("⚠️ Could not extract text from file")
+            except Exception as e:
+                st.error(f"❌ Error reading file: {str(e)}")
 
     st.markdown('<div class="section-title">✅ Success Criteria</div>', unsafe_allow_html=True)
     sc_text = st.text_area("Type Success Criteria here", height=100, placeholder="e.g. Uses at least 3 connectives, writes 6-8 lines, uses past and present tense.")
+    
+    sc_img = st.file_uploader(
+        "📷 Or upload Success Criteria as image/PDF",
+        type=["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp", "pdf", "doc", "docx"],
+        key="sc_img",
+        help="Upload a photo or document of the Success Criteria"
+    )
+    if sc_img:
+        with st.spinner("🔍 Reading Success Criteria..."):
+            try:
+                sc_extracted = extract_arabic_from_image_gemini(sc_img)
+                if sc_extracted:
+                    st.success("✅ Success Criteria extracted from image")
+                    sc_text = sc_extracted
+                    st.text_area("Extracted SC (edit if needed):", value=sc_extracted, height=80, key="sc_preview")
+                else:
+                    st.warning("⚠️ Could not extract text from file")
+            except Exception as e:
+                st.error(f"❌ Error reading file: {str(e)}")
 
     st.markdown('<div class="section-title">📚 Word Bank <span style="font-size:0.75rem;opacity:0.6;font-weight:400">(Optional)</span></div>', unsafe_allow_html=True)
     use_word_bank = st.toggle("Enable Word Bank / Vocabulary List", value=False, help="Add specific words you want the student to use")
