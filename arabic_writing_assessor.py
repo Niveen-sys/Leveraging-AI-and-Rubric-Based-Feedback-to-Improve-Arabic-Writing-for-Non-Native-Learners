@@ -860,14 +860,24 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
         if page_text:
             all_text.append(page_text)
         else:
-            # Give the teacher a clear, actionable error message
+            # ── Gemini exhausted → try Groq vision as last resort ──
+            if quota_errors > 0:
+                try:
+                    groq_text = _groq_ocr_fallback(orig_b64)
+                    if groq_text:
+                        all_text.append(groq_text)
+                        continue  # success — move to next page
+                except Exception as groq_err:
+                    last_error = groq_err
+
+            # All methods failed — give clear guidance
             if quota_errors > 0:
                 key_count = len(api_keys)
                 extra = (
                     " You only have 1 API key configured — add GOOGLE_API_KEY_2 (and optionally GOOGLE_API_KEY_3) "
                     "in .streamlit/secrets.toml to automatically rotate keys when quota is hit."
                     if key_count == 1 else
-                    f" All {key_count} configured API keys have hit their quota."
+                    f" All {key_count} configured Google API keys have hit their quota, and the Groq vision fallback also failed."
                 )
                 raise RuntimeError(
                     f"⚠️ Google Gemini quota exceeded — the free OCR limit has been reached for today.{extra}\n\n"
@@ -923,6 +933,58 @@ def smart_spelling_matcher(writing: str, word_bank: str) -> list:
             })
     corrections.sort(key=lambda x: (x["priority"] == "medium", x["distance"]))
     return corrections[:7]
+
+
+def _groq_ocr_fallback(img_b64: str) -> str:
+    """
+    Fallback OCR using Groq's vision models (llama-4 / llama-3.2 vision).
+    Called automatically when all Gemini/Google API keys are quota-exhausted.
+    """
+    api_key = get_groq_api_key()
+    client = Groq(api_key=api_key)
+
+    # Groq vision-capable models in preference order
+    vision_models = [
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "meta-llama/llama-4-maverick-17b-128e-instruct",
+        "llama-3.2-90b-vision-preview",
+        "llama-3.2-11b-vision-preview",
+    ]
+
+    prompt_text = (
+        "You are an expert Arabic handwriting recognition system. "
+        "Read the handwritten Arabic text in this image EXACTLY as written by the student — "
+        "do NOT correct spelling mistakes, do NOT add tashkeel unless clearly visible. "
+        "Output ONLY the Arabic text, one line per written line. "
+        "No English, no explanations, no comments."
+    )
+
+    last_error = None
+    for model_name in vision_models:
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
+                        },
+                        {"type": "text", "text": prompt_text}
+                    ]
+                }],
+                max_tokens=1500,
+                temperature=0.1,
+            )
+            result = response.choices[0].message.content.strip()
+            if result:
+                return result
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise RuntimeError(f"Groq vision OCR also failed. Last error: {last_error}")
 
 
 def assess_with_gemini(prompt: str) -> str:
