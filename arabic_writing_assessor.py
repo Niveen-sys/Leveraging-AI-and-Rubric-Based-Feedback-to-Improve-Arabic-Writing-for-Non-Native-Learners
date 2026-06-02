@@ -1308,6 +1308,18 @@ st.markdown("""
         box-shadow: inset 0 2px 8px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.04) !important;
     }
 
+    /* Extracted preview fields (LO/SC/WB) — white bg, black bold text */
+    .extracted-preview .stTextArea textarea {
+        background: #ffffff !important;
+        color: #111111 !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        border: 2px solid rgba(212,175,55,0.6) !important;
+        border-radius: 10px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+        direction: rtl !important;
+    }
+
     .stTextInput input:focus, .stTextArea textarea:focus {
         border-color: rgba(212,175,55,0.7) !important;
         box-shadow:
@@ -1521,15 +1533,21 @@ with col_left:
 
     name = st.text_input("Student Name", placeholder="e.g. Sara Ahmed")
 
+    year_group = st.text_input(
+        "Year Group",
+        placeholder="e.g. Year 7, Grade 5, Form 3B...",
+        help="The student's school year group (e.g. Year 7). This appears on the report."
+    )
+
     year = st.slider(
-        "Years of Learning Arabic",
+        "Years of Studying Arabic",
         min_value=2, max_value=9, value=5,
-        help="Drag to select how many years the student has been learning Arabic"
+        help="Drag to select how many years the student has been studying Arabic"
     )
 
     rubric_key, rubric_text = get_rubric_by_year(year)
     if rubric_key:
-        st.markdown(f'<div class="rubric-badge">📊 Rubric applied: <strong>{rubric_key} Years of Study</strong></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="rubric-badge">📊 Rubric applied: <strong>{rubric_key} Years of Studying Arabic</strong></div>', unsafe_allow_html=True)
     else:
         st.warning("No rubric found for this year range.")
 
@@ -1551,7 +1569,9 @@ with col_left:
                 if lo_extracted:
                     st.success("✅ LO extracted")
                     lo_text = lo_extracted
+                    st.markdown('<div class="extracted-preview">', unsafe_allow_html=True)
                     st.text_area("Extracted LO (edit if needed):", value=lo_extracted, height=80, key="lo_preview")
+                    st.markdown('</div>', unsafe_allow_html=True)
                 else:
                     st.warning("⚠️ Could not extract text from file")
             except Exception as e:
@@ -1573,7 +1593,9 @@ with col_left:
                 if sc_extracted:
                     st.success("✅ Success Criteria extracted")
                     sc_text = sc_extracted
+                    st.markdown('<div class="extracted-preview">', unsafe_allow_html=True)
                     st.text_area("Extracted SC (edit if needed):", value=sc_extracted, height=80, key="sc_preview")
+                    st.markdown('</div>', unsafe_allow_html=True)
                 else:
                     st.warning("⚠️ Could not extract text from file")
             except Exception as e:
@@ -1745,7 +1767,7 @@ with col_right:
         st.markdown(f"""
         <div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.3);border-radius:10px;padding:12px;margin-top:10px;font-size:11px;color:rgba(220,205,185,0.9)">
             <div style="font-weight:700;color:#d4af37;margin-bottom:6px;font-size:12px">📋 READY TO ASSESS:</div>
-            <div>✓ Student: <strong>{name.strip()}</strong> (Year {year})</div>
+            <div>✓ Student: <strong>{name.strip()}</strong>{(" — " + year_group.strip()) if year_group.strip() else ""} ({year} years studying Arabic)</div>
             <div>✓ Writing: <strong>~{word_count} words</strong></div>
             <div>✓ Rubric: <strong>{rubric_key} years</strong></div>
             {f'<div>✓ Word Bank: <strong>{wb_count} words</strong></div>' if wb_count > 0 else '<div style="opacity:0.6">○ No word bank</div>'}
@@ -1913,7 +1935,7 @@ if assess_btn:
   <div style="text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #d4af37">
     <div style="font-size:9px;color:#b8941f;letter-spacing:3px;font-weight:700;margin-bottom:3px;text-transform:uppercase">Arabic Writing Assessment</div>
     <div style="font-family:'Amiri',serif;font-size:26px;color:#2c1810;font-weight:700;margin:2px 0">{first_name}</div>
-    <div style="font-size:9px;color:#5a4000;font-weight:600;letter-spacing:1px">YEAR {year} &nbsp;·&nbsp; {year} YEARS OF STUDY &nbsp;·&nbsp; {datetime.now().strftime('%d %b %Y')}</div>
+    <div style="font-size:9px;color:#5a4000;font-weight:600;letter-spacing:1px">{(year_group.strip().upper() + " &nbsp;·&nbsp; ") if year_group.strip() else ""}{year} YEARS OF STUDYING ARABIC &nbsp;·&nbsp; {datetime.now().strftime('%d %b %Y')}</div>
   </div>
 
   <!-- ── Score Badge ── -->
