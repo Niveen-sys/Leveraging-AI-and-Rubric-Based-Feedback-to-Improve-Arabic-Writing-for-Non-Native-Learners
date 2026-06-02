@@ -364,122 +364,170 @@ def levenshtein_distance(s1: str, s2: str) -> int:
     return previous_row[-1]
 
 
+def _get_next_step_examples(year: int) -> str:
+    """Return year-appropriate concrete next step examples for the assessment prompt."""
+    if year <= 3:
+        return """  ✓ "Add one sentence using past tense — e.g. start with ذهبتُ إلى... or أكلتُ..."
+  ✓ "Use the adjective جميل or كبير after a noun you already mentioned, e.g. بيت كبير"
+  ✓ "Add the connective و or لكن to join two of your sentences"
+  ✓ "Write one sentence about a family member using هو or هي instead of أنا"
+  ✓ "Add a time phrase like كل يوم or في الصباح to one of your sentences"
+  ✓ "Include one of these unused word bank words: [word] — use it to describe [topic]" """
+    elif year <= 5:
+        return """  ✓ "Add a sentence in the past tense with a time phrase, e.g. أمس، ذهبتُ إلى... لأن..."
+  ✓ "Use the connective بعد ذلك or أيضاً to link your third and fourth sentences"
+  ✓ "Add your opinion using أعتقد أن... or في رأيي... followed by a reason with لأن"
+  ✓ "Write one sentence using a different subject (هو or هي) to describe someone else"
+  ✓ "Use two adjectives together, e.g. المدرسة كبيرة وجميلة، to give more detail"
+  ✓ "Add the negation لا or لم to one sentence to show contrast, e.g. لا أحب... لأن" """
+    elif year <= 7:
+        return """  ✓ "Add a conditional sentence using إذا... or لو... to extend your argument"
+  ✓ "Write one sentence using the future tense سوف + verb to describe a plan or hope"
+  ✓ "Use بالإضافة إلى ذلك or من ناحية أخرى to introduce a contrasting point"
+  ✓ "Add a relative clause using الذي or التي to give more detail about a noun you mentioned"
+  ✓ "Justify your opinion more fully: add لأن followed by TWO reasons connected with و"
+  ✓ "Include a rhetorical question or هل to engage the reader at the start or end" """
+    else:
+        return """  ✓ "Open with a strong hook — a question, statistic, or bold statement — before your main argument"
+  ✓ "Add a counter-argument paragraph: acknowledge the opposing view with يرى البعض أن... then refute with ولكن في رأيي..."
+  ✓ "Use a passive construction مثل: يُعتبر، يُقال، يُلاحظ to vary your sentence structure"
+  ✓ "Vary your connectives — replace و with علاوة على ذلك or فضلاً عن ذلك in at least one place"
+  ✓ "Add a concluding paragraph that restates your thesis using different vocabulary (paraphrase, don't repeat)"
+  ✓ "Use one idiomatic Arabic expression or proverb to strengthen your argument" """
+
+
 def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_key: str, rubric: str, word_bank: str = '') -> str:
     first_name = name.strip().split()[0] if name.strip() else name
     level_note = get_level_note(year)
     word_bank_section = f"""Word Bank provided by teacher: {word_bank}
-- CRITICAL: Check which words from the word bank the student DID use — praise them specifically
+- CRITICAL: Check which words from the word bank the student DID use — praise them specifically in WWW
 - CRITICAL: Identify 2-3 HIGH-IMPACT words from word bank they DIDN'T use that would strengthen their writing
-- Use these unused words as specific "next steps" suggestions""" if word_bank.strip() else "No word bank provided."
+- Use these unused words as specific next steps — name the EXACT Arabic word""" if word_bank.strip() else "No word bank provided."
+
+    # Build year-specific next step instruction bank
+    next_step_examples = _get_next_step_examples(year)
 
     return f"""
 You are an experienced Arabic teacher marking a student's handwritten work.
-You must produce feedback in EXACTLY the same style as this teacher example:
 
+═══════════════════════════════════════════════════
+PART A — READ THE WRITING CAREFULLY FIRST
+═══════════════════════════════════════════════════
+Before writing any feedback, analyse what the student ACTUALLY wrote:
+
+CHECKLIST — tick off what the student HAS already done:
+□ Used past tense verbs (e.g. ذهبت، أكلت، لعبت)
+□ Used present tense verbs (e.g. أذهب، أحب، يمكنني)
+□ Used connectives (e.g. و، لأن، ولكن، أيضاً، ثم، بعد ذلك)
+□ Used time phrases (e.g. كل يوم، في الصباح، أمس، الأسبوع الماضي)
+□ Used adjectives (e.g. جميل، كبير، ممتع، مفيد)
+□ Used personal pronouns (أنا، هو، هي، نحن)
+□ Gave an opinion (أعتقد، أفضّل، في رأيي، أحب لأن)
+□ Used word bank vocabulary (check each word from the bank)
+□ Wrote more than 4 lines
+□ Has an opening sentence
+□ Has a closing/conclusion sentence
+□ Used negation (لا، لم، ليس)
+□ Used different subjects (not just أنا)
+□ Used prepositions (في، على، من، إلى، مع، عند)
+□ Used question forms
+
+ONLY suggest things the student has NOT ticked off above.
+
+═══════════════════════════════════════════════════
+PART B — GENERATE FEEDBACK
+═══════════════════════════════════════════════════
 TEACHER STYLE EXAMPLE:
-★ Amazing informations expressed clearly using past tense
+★ Amazing information expressed clearly using past tense
 ★ Nice opening & closure  
 ★ Excellent use of time adverbs & connectives
-↗ Even better if you use different subjects (family members)
-↗ Even better if you add more descriptive adjectives like كبير، جميل
+↗ Even better if you add a sentence using a different subject like هو or هي
+↗ Even better if you use descriptive adjectives like كبير، جميل to describe nouns
 
 YOUR FEEDBACK MUST:
 1. Be written in English
-2. Use ★ bullet points for WWW (green stars — what went well) — keep SHORT and SPECIFIC to what student ACTUALLY wrote
-3. Use ↗ for EBI (red arrow) — EBI MUST be SPECIFIC and ACTIONABLE
-   - If Success Criteria not met → suggest exactly what's missing from SC
-   - If word bank provided → suggest 2-3 SPECIFIC unused words from word bank
-   - If rubric gap → suggest next rubric level improvement
-   - Start each with "Even better if you use..." or "Even better if you..."
-4. Be SHORT and punchy — no long paragraphs, just clear bullet points
-5. Identify ONLY TRUE Arabic spelling mistakes (wrong Arabic → correct Arabic). CRITICAL RULES:
-   - ONLY flag Arabic words written INCORRECTLY in Arabic script → correct Arabic
-   - NEVER flag English words → Arabic corrections
-   - NEVER flag romanised/transliterated words (e.g. "akhtar", "bahar") — these are OCR artifacts, ignore completely
-   - IGNORE hamza differences (أ vs ا vs إ vs آ) — do NOT correct these
-   - IGNORE ة vs ه at word endings — do NOT correct these
-   - IGNORE ى vs ي at word endings — do NOT correct these
-   - ONLY flag clear letter-body errors: wrong consonant used, missing letter, extra letter, wrong dot placement changing meaning
-   - Predict what the student INTENDED based on word bank vocabulary, topic, and success criteria context
-   - Maximum 5 corrections, all must be Arabic→Arabic
-6. Generate "NEXT STEPS" - 2-3 specific, achievable targets based on:
-   - Unmet success criteria that the student has NOT already done
-   - Unused word bank vocabulary (specific Arabic words)
-   - Next rubric level requirements
-   - CRITICAL: Do NOT suggest things the student already did in their writing
-   - CRITICAL: Read the writing carefully — if student already used connectives, do NOT tell them to use connectives
-   - CRITICAL: Each next step must be something GENUINELY missing from the writing
-7. Be appropriate for Year {year} student ({year} years of Arabic)
+2. Use ★ for WWW (2-3 points) — SHORT, specific to what the student ACTUALLY wrote
+   - Reference actual words/sentences they used
+   - Mention any word bank words they used successfully
+3. Use ↗ for EBI (MAXIMUM 2 points) — MUST be specific and actionable
+   - Start each with "Even better if you..."
+   - Must target things GENUINELY MISSING from their writing (see checklist above)
+4. Be appropriate for Year {year} student ({year} years of Arabic)
 
-SCORING CALIBRATION — CRITICAL:
-- Score must reflect ACTUAL quality relative to {year} years of study
-- A student with {year} years of study who writes coherent sentences appropriate to their level should score AT LEAST Accomplished (8-9/15)
-- Do NOT default to Beginning unless the writing is genuinely very poor
-- Score generously for genuine effort and appropriate-level content
-- For Year {year}: if the student writes coherent on-topic sentences with some vocabulary, that is minimum Accomplished
-- Score breakdown: 5 categories × 3 points each = 15 total
-  * Beginning = 1pt per category
-  * Developing = 1.5pt per category
-  * Accomplished = 2pt per category
-  * Advanced = 2.5pt per category
-  * Exemplary = 3pt per category
-- Add up the ACTUAL per-category scores to get the total — do not under-score
+═══════════════════════════════════════════════════
+PART C — NEXT STEPS (MOST IMPORTANT PART)
+═══════════════════════════════════════════════════
+Generate EXACTLY 2-3 next steps. Each must be:
+  ✓ A CONCRETE, ACTIONABLE TASK — not a vague suggestion
+  ✓ Based ONLY on things GENUINELY MISSING from the writing
+  ✓ Specific to the student's level and the success criteria
+  ✓ Something the student can DO in their next piece of writing
 
-STUDENT: {first_name} (Year {year} — {year} years of Arabic study)
+NEXT STEP FORMAT — each step must follow this pattern:
+  "[Action verb] + [exact structure/word/grammar point] + [brief example in Arabic]"
 
-LEVEL GUIDANCE:
-{level_note}
+GOOD EXAMPLES of well-formed next steps:
+{next_step_examples}
 
-LEARNING OBJECTIVE: {lo if lo.strip() else "Not provided."}
-SUCCESS CRITERIA: {sc if sc.strip() else "Not provided."}
-RUBRIC: {rubric}
+BAD examples (too vague — NEVER write these):
+  ✗ "Use more connectives"
+  ✗ "Improve your vocabulary"
+  ✗ "Write more sentences"
+  ✗ "Use different tenses"
+  ✗ "Add more detail"
+
+NEXT STEP SOURCES — use in this priority order:
+  1. UNMET SUCCESS CRITERIA → turn each unmet SC into a specific task
+     e.g. SC says "use past tense" → "Write one sentence using past tense, e.g. ذهبتُ إلى..."
+  2. UNUSED WORD BANK WORDS → name the exact word and where to use it
+     e.g. "Add the word [Arabic word] to describe [noun from their writing]"
+  3. NEXT RUBRIC LEVEL → identify the specific thing needed to reach the next level
+     e.g. rubric says next level needs connectives → give exact connective + example
+  4. PATTERN FROM THEIR WRITING → something they did once but could extend
+     e.g. they used ذهبت once → "Add another past tense verb like لعبتُ or أكلتُ"
+
+═══════════════════════════════════════════════════
+PART D — SPELLING (STRICT RULES)
+═══════════════════════════════════════════════════
+Flag ONLY true spelling mistakes — wrong Arabic letters in Arabic script.
+  • "wrong": the word exactly as the student wrote it (Arabic script only)
+  • "correct": the correct Arabic spelling
+  • SKIP: romanised text, English words, OCR artifacts
+  • SKIP: ة/ه confusion, ى/ي confusion, hamza variations (أ/ا/إ) — these are not flagged
+  • ONLY flag: wrong consonant used, missing essential letter, extra letter that changes meaning
+  • USE CONTEXT: predict the intended word from word bank, topic, and surrounding text
+  • MAXIMUM 5 corrections
+
+═══════════════════════════════════════════════════
+STUDENT INFO
+═══════════════════════════════════════════════════
+Student: {first_name} (Year {year} — {year} years of Arabic study)
+Level: {level_note}
+Learning Objective: {lo if lo.strip() else "Not provided."}
+Success Criteria: {sc if sc.strip() else "Not provided."}
+Rubric: {rubric}
 {word_bank_section}
 
 STUDENT WRITING:
 {writing}
 
-OUTPUT — return ONLY this JSON and nothing else (no markdown, no explanation):
+═══════════════════════════════════════════════════
+SCORING
+═══════════════════════════════════════════════════
+Score: 5 categories × 3 points each = 15 total
+  Beginning=1 | Developing=1.5 | Accomplished=2 | Advanced=2.5 | Exemplary=3
+Calibration: a Year {year} student writing coherent on-topic sentences = minimum Accomplished (8-9/15)
+
+OUTPUT — return ONLY this JSON (no markdown, no explanation):
 {{
   "www": ["strength 1", "strength 2", "strength 3"],
-  "ebi": ["improvement 1", "improvement 2"],
-  "next_steps": ["specific achievable target 1", "specific achievable target 2", "specific achievable target 3"],
-  "spelling": [{{"wrong": "arabic word with mistake", "correct": "correct arabic word"}}],
-  "grammar": [{{"original": "sentence from writing", "issue": "what is wrong", "hint": "guide to fix without giving answer"}}],
-  "sc_check": [{{"criterion": "...", "met": true/false, "comment": "..."}}],
-  "score": {{"level": "Beginning/Developing/Accomplished/Advanced/Exemplary", "score": 0, "out_of": 15, "reason": "..."}}
+  "ebi": ["Even better if you...", "Even better if you..."],
+  "next_steps": ["concrete specific task 1", "concrete specific task 2", "concrete specific task 3"],
+  "spelling": [{{"wrong": "arabic word as written", "correct": "correct arabic word"}}],
+  "grammar": [{{"original": "sentence from writing", "issue": "what is wrong", "hint": "how to fix without giving the answer"}}],
+  "sc_check": [{{"criterion": "...", "met": true, "comment": "..."}}],
+  "score": {{"level": "Beginning/Developing/Accomplished/Advanced/Exemplary", "score": 0, "out_of": 15, "reason": "brief reason"}}
 }}
-
-SPELLING RULES — STRICT:
-- "wrong" field: must be an Arabic word as written by student (in Arabic script only)
-- "correct" field: must be the correct Arabic spelling (in Arabic script only)
-- NEVER put English, romanised text, or transliterations in either field
-- If a word looks like English transliteration (e.g. "akhtar", "malak", "sama") → SKIP IT, it is an OCR error
-- Only flag words that are clearly written in Arabic script but have wrong letters
-- Predict the intended word using: word bank context, topic, success criteria, surrounding words
-- Maximum 5 entries, only genuine Arabic→Arabic corrections
-
-NEXT STEPS RULES — CRITICAL:
-- Read the student writing VERY carefully first
-- List what structures/words the student ALREADY used
-- Only suggest things that are GENUINELY MISSING
-- NEVER suggest "use connectives" if student already used connectives
-- NEVER suggest "use past tense" if student already used past tense
-- NEVER suggest "write more lines" if student already meets the line count
-- Be specific: name the EXACT Arabic word or structure they should add
-- Example good next step: "Add the connective بالإضافة إلى to link your ideas"
-- Example bad next step: "Use more connectives" (too vague, might repeat what they did)
-
-WWW RULES:
-- 2-3 specific strengths referencing ACTUAL words or sentences from the writing
-- MUST mention any word bank words they successfully used
-- Be encouraging but grounded in what they actually wrote
-
-EBI RULES:
-- MAXIMUM 2 points
-- Must come from: unmet SC, unused word bank, or rubric gaps
-- Be specific and kind — start with "Even better if you..."
-
-Keep everything age-appropriate for Year {year}.
 """
 
 
@@ -706,70 +754,118 @@ def _gemini_ocr_rest(img_b64: str, api_key: str, model: str, prompt: str) -> str
 
 # ── OCR prompt — multi-pass strategy ─────────────────────────────────────────
 _OCR_PROMPT = """
-You are an EXPERT Arabic handwriting recognition system. Your ONLY job is to read what
-a non-native Arabic student wrote by hand and transcribe it faithfully.
+You are an EXPERT Arabic handwriting recognition system specialising in NON-NATIVE student work.
+Your ONLY job is to faithfully transcribe what the student wrote — preserving ALL their errors.
 
 ══════════════════════════════════════════════════════
-STEP 1 — SCAN THE WHOLE PAGE FIRST
+STEP 1 — UNDERSTAND THE CONTEXT BEFORE READING
 ══════════════════════════════════════════════════════
-Before reading individual words:
-• Count the lines. Note where each line starts and ends (right to left).
-• Identify any title or heading written larger/above the main text.
-• Note the approximate topic (school, family, food, weather, hobbies…) from
-  any clearly readable words — this context helps you decode unclear words.
+Non-native Arabic students at school level typically write about these topics:
+  • SELF / FAMILY: اسمي، عمري، أسرتي، أبي، أمي، أخي، أختي، بيتي
+  • SCHOOL: مدرستي، الفصل، المعلم، الدروس، الواجب، الامتحان
+  • HOBBIES: أحب، ألعب، أشاهد، الكرة، الموسيقى، القراءة، الرياضة
+  • FOOD: أكل، أشرب، الطعام، الفاكهة، الخضروات، المطعم
+  • DAILY ROUTINE: أستيقظ، أذهب، أعود، الصباح، المساء، كل يوم
+  • DESCRIPTION: جميل، كبير، صغير، ممتع، مفيد، سعيد، ذكي
+  • CONNECTIVES: و، لأن، ولكن، أيضاً، ثم، بعد ذلك، لذلك
+  • TIME PHRASES: كل يوم، في الصباح، أمس، الأسبوع الماضي، في المستقبل
+
+Common beginner vocabulary the student may have written (possibly with errors):
+  ذهبت، لعبت، أكلت، شربت، رأيت، كتبت، قرأت، ساعدت
+  يمكنني، أريد، أحتاج، أعتقد، أفضّل، أستمتع
+  مع، في، على، من، إلى، عند، بين
+  هذا، هذه، هناك، هنا، كثير، قليل، دائماً، أحياناً
 
 ══════════════════════════════════════════════════════
-STEP 2 — READ LINE BY LINE, RIGHT TO LEFT
+STEP 2 — SCAN THE WHOLE IMAGE FIRST
 ══════════════════════════════════════════════════════
-For each line, read every word in RIGHT-TO-LEFT order (Arabic direction).
-
-LETTER READING RULES — apply in this order:
-1. POSITION: determine if the letter is word-initial / medial / final — each
-   Arabic letter has a different shape per position. Use this to narrow options.
-2. BASELINE SHAPE: identify the core skeleton of the letter ignoring dots.
-3. DOTS: count dots and their position (above / below). Dots are the primary
-   differentiator between: ب(1↓) ت(2↑) ث(3↑) | ج(1↓) ح(none) خ(1↑) |
-   د/ذ(1↑) | ر/ز(1↑) | س/ش(3↑) | ص/ض(1↑) | ط/ظ(1↑) | ع/غ(1↑) |
-   ف(1↑) ق(2↑) | ن(1↑) ي/ى(2↓)
-4. STUDENT DOT ERRORS: non-native students often misplace dots or forget them.
-   If the skeleton matches a known Arabic word in context, accept it even if
-   dots are wrong — transcribe what you see (wrong dots included).
-5. CONTEXT RECOVERY: if a word is ambiguous, pick the reading that makes the
-   most grammatical and topical sense given the surrounding words.
-
-COMMON STUDENT ERRORS TO EXPECT & PRESERVE (do NOT correct):
-  • ة written as ه at word-end (or vice-versa)
-  • ى / ي confusion at word-end
-  • Hamza missing or wrong (أ إ آ ء ؤ ئ all accepted as written)
-  • Doubled vowel letters (اا, وو, يي) as lengthening errors
-  • Letters run together when they shouldn't
-  • Extra spacing in the middle of a word
-  • Missing dots on ن ي ت ث etc.
-  • Connected letters that should be separate (e.g. وأنا written as واﻧﺎ)
-
-EXTREMELY UNCLEAR LETTERS:
-  → Make your best guess from context.
-  → Only use [?] if you truly cannot determine even the approximate letter.
+• Count the lines. Identify title/heading (larger text at top).
+• Note the topic from any clearly readable words — this is your context anchor.
+• Note writing quality: are letters well-formed or hasty? Are dots often missing?
+• Reading direction: ALWAYS right to left, line by line top to bottom.
 
 ══════════════════════════════════════════════════════
-STEP 3 — VERIFY EACH LINE
+STEP 3 — READ WORD BY WORD USING THIS DECISION TREE
 ══════════════════════════════════════════════════════
-After transcribing each line, re-read it mentally:
-  • Does it flow as Arabic? (subject → verb → object structure is common)
-  • Are word lengths plausible for common beginner vocabulary?
-  • Fix any obvious left-to-right reversal errors you made during reading.
+For EVERY ambiguous word, work through this in order:
+
+1. SKELETON FIRST — identify the letter shapes WITHOUT dots
+   Core shapes: ا ب ح د ر س ص ط ع ف ق ك ل م ن ه و ي
+   (dots are secondary — many students forget or misplace them)
+
+2. POSITION SHAPES — each letter looks different at start / middle / end:
+   ع: ع (start) → ـعـ (mid) → ـع (end)
+   ه: هـ (start) → ـهـ (mid) → ـه (end)  
+   ك: كـ → ـكـ → ـك
+   ف: فـ → ـفـ → ـف (easy to confuse with ق)
+
+3. DOT DECISION — after fixing the skeleton, add dots:
+   1 dot below: ب
+   2 dots above: ت  |  2 dots below: ي
+   3 dots above: ث ش
+   1 dot above: خ ذ ز ض ظ غ ف ن (check position carefully)
+   2 dots above: ق
+   NO dots: ا ح د ر س ص ط ع ك ل م و ه
+
+   ⚠ STUDENT DOT ERRORS — very common, PRESERVE them:
+   - ب written without dot (looks like ا with bump)
+   - ن written without dot (looks like ي shape)
+   - ي written with dots above (student wrote ت instead)
+   - ة at end written as ه (VERY common — keep as written)
+   - Dots above when they should be below, or vice versa
+
+4. WORD RECOVERY — if a word is unclear, ask: 
+   "Given the TOPIC and SURROUNDING WORDS, what common Arabic word would fit here?"
+   Pick the best match from the vocabulary list in Step 1.
+   Transcribe the word AS WRITTEN (including errors), not the corrected version.
+
+5. NEVER CORRECT — preserve ALL of these exactly as written:
+   • ة written as ه or ت at word-end
+   • ى written as ي (or vice versa) at word-end  
+   • Missing hamza: أ written as ا, إ written as ا, ؤ written as و, ئ written as ي
+   • Wrong tense vowel patterns (كتبت vs كاتبت)
+   • Wrong gender agreement (الولد الجميلة instead of الجميل)
+   • Wrong case endings or tanwin
+   • Repeated letters, missing letters, extra letters
+   • Run-together words or incorrectly split words
+
+══════════════════════════════════════════════════════
+STEP 4 — HANDLE ESPECIALLY TRICKY PAIRS
+══════════════════════════════════════════════════════
+Pairs students confuse most — use CONTEXT to decide:
+  ح / ج / خ  (same body, different dots)
+  ر / ز       (ز has 1 dot above)
+  د / ذ       (ذ has 1 dot above)
+  س / ش      (ش has 3 dots above)
+  ص / ض      (ض has 1 dot above-right)
+  ط / ظ       (ظ has 1 dot above)
+  ع / غ       (غ has 1 dot above)
+  ف / ق       (ق has 2 dots above; ف has 1 dot above)
+  ه / ة / ت   (at word-end, students mix these — keep as written)
+  ك / ل       (in medial position, easily confused if handwriting is fast)
+
+For NUMBERS mixed into text:
+  Preserve Arabic-Indic numerals (١٢٣٤٥٦٧٨٩٠) exactly as written.
+
+══════════════════════════════════════════════════════
+STEP 5 — VERIFY BEFORE OUTPUTTING
+══════════════════════════════════════════════════════
+Read your transcription back:
+  ✓ Does the right-to-left word order make sense for the topic?
+  ✓ Are there any words you accidentally read left-to-right? (Fix them)
+  ✓ Does each line have a plausible number of words for what you see?
+  ✓ Did you preserve all errors (not silently fix them)?
 
 ══════════════════════════════════════════════════════
 OUTPUT FORMAT — STRICT
 ══════════════════════════════════════════════════════
-• Output ONLY the Arabic text. One transcribed line per written line.
-• NO English words. NO explanations. NO tashkeel unless clearly visible in the image.
-• NO corrections — preserve every student error exactly as written.
-• NO comments, notes, or confidence scores.
-• If a page has a title/heading, put it on its own line first.
-• Blank lines in the writing → blank lines in output.
+• Output ONLY the Arabic text — one transcribed line per written line.
+• NO English words. NO explanations. NO tashkeel unless clearly visible.
+• NO corrections. NO comments. NO confidence scores. NO [?] unless truly unreadable.
+• Title/heading on its own line first if present.
+• Preserve blank lines.
 
-NOW READ THE HANDWRITING IN THE IMAGE:
+NOW TRANSCRIBE THE HANDWRITING:
 """
 
 
