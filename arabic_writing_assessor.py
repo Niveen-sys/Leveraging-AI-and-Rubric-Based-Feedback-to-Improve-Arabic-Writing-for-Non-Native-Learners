@@ -1298,35 +1298,42 @@ st.markdown("""
     }
 
     .stTextInput input, .stTextArea textarea {
-        background: rgba(255,255,255,0.04) !important;
-        border: 1px solid rgba(212,175,55,0.25) !important;
+        background: #ffffff !important;
+        border: 1px solid rgba(212,175,55,0.4) !important;
         border-radius: 12px !important;
-        color: #ede0c8 !important;
+        color: #1a1a1a !important;
         font-family: 'Tajawal', sans-serif !important;
         font-size: 1rem !important;
+        font-weight: 600 !important;
         transition: all 0.3s ease !important;
-        box-shadow: inset 0 2px 8px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.04) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
     }
 
-    /* Extracted preview fields (LO/SC/WB) — white bg, black bold text */
+    /* Placeholder text — keep it subtle */
+    .stTextInput input::placeholder, .stTextArea textarea::placeholder {
+        color: #aaaaaa !important;
+        font-weight: 400 !important;
+    }
+
+    /* Extracted preview fields (LO/SC/WB) — same white but with gold border highlight */
     .extracted-preview .stTextArea textarea {
-        background: #ffffff !important;
+        background: #fffdf5 !important;
         color: #111111 !important;
         font-weight: 700 !important;
         font-size: 1rem !important;
-        border: 2px solid rgba(212,175,55,0.6) !important;
+        border: 2px solid rgba(212,175,55,0.8) !important;
         border-radius: 10px !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+        box-shadow: 0 2px 12px rgba(212,175,55,0.2) !important;
         direction: rtl !important;
     }
 
     .stTextInput input:focus, .stTextArea textarea:focus {
-        border-color: rgba(212,175,55,0.7) !important;
+        border-color: #d4af37 !important;
         box-shadow:
-            inset 0 2px 8px rgba(0,0,0,0.2),
-            0 0 0 2px rgba(212,175,55,0.15),
+            0 0 0 2px rgba(212,175,55,0.25),
             0 0 20px rgba(212,175,55,0.1) !important;
-        background: rgba(255,255,255,0.06) !important;
+        background: #ffffff !important;
+        outline: none !important;
     }
 
     .stButton > button {
