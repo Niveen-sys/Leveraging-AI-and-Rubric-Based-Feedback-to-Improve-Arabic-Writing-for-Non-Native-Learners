@@ -707,10 +707,30 @@ def _gemini_ocr_rest(img_b64: str, api_key: str, model: str, prompt: str) -> str
         "generationConfig": {"temperature": 0.1, "topP": 0.95, "topK": 40, "maxOutputTokens": 2048}
     }
     resp = _requests.post(url, json=payload, timeout=45)
+    if resp.status_code == 429:
+        raise RuntimeError(f"QUOTA_EXCEEDED:{resp.status_code} {resp.text[:120]}")
     if resp.status_code != 200:
         raise RuntimeError(f"{resp.status_code} {resp.text[:200]}")
     data = resp.json()
     return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+
+def _tesseract_ocr(img: Image.Image) -> str:
+    """
+    Free local fallback: Tesseract with Arabic language pack.
+    Works offline with no API quota. Quality is lower than Gemini
+    but perfectly usable when Gemini quota is exceeded.
+    """
+    try:
+        import pytesseract
+        # Use Arabic + English, right-to-left page segmentation (mode 6 = uniform block)
+        config = r"--oem 3 --psm 6 -l ara+eng"
+        text = pytesseract.image_to_string(img, config=config)
+        # Clean up noise lines (very short fragments from Tesseract)
+        lines = [ln for ln in text.splitlines() if len(ln.strip()) > 1]
+        return "\n".join(lines).strip()
+    except Exception as e:
+        raise RuntimeError(f"Tesseract OCR failed: {e}")
 
 # ── OCR prompt ────────────────────────────────────────────────────────────────
 _OCR_PROMPT = """
@@ -818,37 +838,69 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
     raw_images = convert_to_pil_image(uploaded_file)
     last_error = None
     all_text = []
+    quota_exceeded = False  # once True, skip Gemini and go straight to Tesseract
 
     for img in raw_images:
         enhanced_img = _preprocess_image_for_ocr(img)
-        img_b64 = pil_image_to_base64(enhanced_img)
         page_text = None
 
-        for model_name in models_to_try:
-            try:
-                page_text = _gemini_ocr_rest(img_b64, api_key, model_name, _OCR_PROMPT)
-                break
-            except Exception as e:
-                last_error = e
-                continue
+        # ── Tier 1: Gemini (best quality) ──────────────────────────────
+        if not quota_exceeded:
+            img_b64 = pil_image_to_base64(enhanced_img)
+            for model_name in models_to_try:
+                try:
+                    page_text = _gemini_ocr_rest(img_b64, api_key, model_name, _OCR_PROMPT)
+                    break
+                except RuntimeError as e:
+                    last_error = e
+                    if "QUOTA_EXCEEDED" in str(e):
+                        quota_exceeded = True  # stop trying Gemini for all remaining pages
+                        break
+                    continue
+                except Exception as e:
+                    last_error = e
+                    continue
 
-        # Retry with original (unprocessed) image if enhanced failed
-        if not page_text:
+        # ── Tier 1b: retry with original image if enhanced failed ──────
+        if not page_text and not quota_exceeded:
             orig_b64 = pil_image_to_base64(img)
             for model_name in models_to_try:
                 try:
                     page_text = _gemini_ocr_rest(orig_b64, api_key, model_name, _OCR_PROMPT)
                     break
+                except RuntimeError as e:
+                    last_error = e
+                    if "QUOTA_EXCEEDED" in str(e):
+                        quota_exceeded = True
+                        break
+                    continue
                 except Exception as e:
                     last_error = e
                     continue
 
+        # ── Tier 2: Tesseract (free local fallback) ────────────────────
+        if not page_text:
+            try:
+                page_text = _tesseract_ocr(enhanced_img)
+                if not page_text:
+                    page_text = _tesseract_ocr(img)  # try original if enhanced gives nothing
+            except Exception as e:
+                last_error = e
+
         if page_text:
             all_text.append(page_text)
         else:
-            raise RuntimeError(f"All OCR models failed. Last error: {last_error}")
+            raise RuntimeError(
+                f"All OCR methods failed (Gemini quota exceeded + Tesseract error). "
+                f"Last error: {last_error}\n"
+                f"💡 Tip: You can paste the Arabic text manually in the 'Type / Paste Text' tab."
+            )
 
     result = "\n".join(all_text)
+    # Tag result so the UI can warn the user it came from Tesseract
+    if quota_exceeded and result:
+        st.session_state["_ocr_used_tesseract"] = True
+
     cache[file_hash] = result
     _increment_usage("ocr")
     return result
@@ -1396,6 +1448,17 @@ with col_right:
                 auto_corrections = []
                 if word_bank_text.strip():
                     auto_corrections = smart_spelling_matcher(extracted_writing, word_bank_text)
+
+                # ── Show warning if Tesseract was used as fallback ──────
+                if st.session_state.get("_ocr_used_tesseract"):
+                    st.warning(
+                        "⚠️ **Gemini quota exceeded** — used free Tesseract OCR as fallback.\n\n"
+                        "Tesseract is less accurate than Gemini for Arabic handwriting. "
+                        "**Please review the extracted text carefully** and correct any errors "
+                        "before clicking Assess. You can also paste the text manually in the "
+                        "'Type / Paste Text' tab for best results."
+                    )
+                    st.session_state["_ocr_used_tesseract"] = False  # reset flag
 
                 st.markdown("""
 <div style="background:linear-gradient(135deg,rgba(212,175,55,0.25),rgba(212,175,55,0.15));
