@@ -75,7 +75,6 @@ GRAMMAR/SPELLING:
 - Advanced (2.5): Present and past tenses with personal pronouns (I/He/She/We), connectives (2-3), prepositions (2-3). Some spelling errors.
 - Exemplary (3): Present and past tenses with personal pronouns (I/He/She/We), connectives (2-3), prepositions (2-3). No spelling errors.
 """,
-
     "3-4": """
 Writing Skill: 3 to 4 Years of Study
 
@@ -114,7 +113,6 @@ GRAMMAR/SPELLING:
 - Advanced (2.5): 2 tenses, some spelling errors.
 - Exemplary (3): 2 tenses with more personal pronouns. Minimal spelling errors.
 """,
-
     "4-5": """
 Writing Skill: 4 to 5 Years of Study
 
@@ -153,7 +151,6 @@ GRAMMAR/SPELLING:
 - Advanced (2.5): 3 tenses, some spelling errors.
 - Exemplary (3): 3 tenses, minimal spelling errors.
 """,
-
     "5-6": """
 Writing Skill: 5 to 6 Years of Study
 
@@ -192,7 +189,6 @@ GRAMMAR/SPELLING:
 - Advanced (2.5): All tenses, no spelling errors.
 - Exemplary (3): All tenses, no errors, some complex verb forms.
 """,
-
     "6-7": """
 Writing Skill: 6 to 7 Years of Study
 
@@ -231,7 +227,6 @@ GRAMMAR/SPELLING:
 - Advanced (2.5): All tenses plus negation, some spelling errors.
 - Exemplary (3): All tenses plus negation, no spelling errors.
 """,
-
     "7-8": """
 Writing Skill: 7 to 8 Years of Study
 
@@ -270,7 +265,6 @@ GRAMMAR/SPELLING:
 - Advanced (2.5): Many tenses including negation, few spelling errors.
 - Exemplary (3): All tenses including negation and opinions, minimal spelling errors.
 """,
-
     "8-9": """
 Writing Skill: 8 to 9 Years of Study
 
@@ -311,11 +305,9 @@ GRAMMAR/SPELLING:
 """
 }
 
-
 # =============================================
 # HELPER FUNCTIONS
 # =============================================
-
 def get_rubric_by_year(year: int) -> tuple[str, str]:
     for key, rubric_text in RUBRICS.items():
         if isinstance(key, str) and "-" in key:
@@ -335,7 +327,6 @@ def get_rubric_by_year(year: int) -> tuple[str, str]:
         return str(closest), RUBRICS[closest]
     return "", ""
 
-
 def get_level_note(year: int) -> str:
     if year <= 3:
         return "This is a beginner student. Focus on basic sentence structure, simple vocabulary, and present tense. Keep expectations simple and very encouraging."
@@ -345,7 +336,6 @@ def get_level_note(year: int) -> str:
         return "This is an intermediate student. Expect coherent paragraphs, variety of tenses, connectives, and some complex structures."
     else:
         return "This is an advanced student. Expect multi-paragraph writing, rich vocabulary, all tenses, complex structures, and strong coherence."
-
 
 def levenshtein_distance(s1: str, s2: str) -> int:
     if len(s1) < len(s2):
@@ -363,14 +353,28 @@ def levenshtein_distance(s1: str, s2: str) -> int:
         previous_row = current_row
     return previous_row[-1]
 
-
-def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_key: str, rubric: str, word_bank: str = '') -> str:
+def build_prompt(name: str, year: int, lo: str, sc: str, writing: str,
+                 rubric_key: str, rubric: str, word_bank: str = '') -> str:
     first_name = name.strip().split()[0] if name.strip() else name
     level_note = get_level_note(year)
-    word_bank_section = f"""Word Bank provided by teacher: {word_bank}
-- CRITICAL: Check which words from the word bank the student DID use — praise them specifically
-- CRITICAL: Identify 2-3 HIGH-IMPACT words from word bank they DIDN'T use that would strengthen their writing
-- Use these unused words as specific "next steps" suggestions""" if word_bank.strip() else "No word bank provided."
+
+    # ── Word bank section ─────────────────────────────────────────────────
+    if word_bank.strip():
+        word_bank_section = f"""Word Bank provided by teacher:
+{word_bank}
+
+WORD BANK SPELLING RULES — TOP PRIORITY:
+- The word bank IS the ground truth for correct Arabic spelling
+- FIRST scan the word bank for every word that appears (correctly or incorrectly) in the student writing
+- If a student wrote a word that SHOULD be a word-bank word but spelled it wrong → flag it
+- If a student wrote something close (edit distance ≤ 2) to a word-bank word → that is a spelling error, use the word-bank version as the correct form
+- ONLY flag spelling errors that relate to word-bank vocabulary OR very clear standard Arabic errors
+- Do NOT flag words that have no word-bank equivalent — if unsure, skip it
+- CRITICAL: Check which word-bank words the student DID use — praise them specifically
+- CRITICAL: Identify 2-3 HIGH-IMPACT unused word-bank words that would strengthen the writing → use them as next-step suggestions"""
+    else:
+        word_bank_section = """No word bank provided.
+SPELLING RULES: Only flag clear, obvious Arabic spelling errors where wrong consonants, missing letters, or extra letters change the word meaning. Maximum 3 corrections. Be very conservative."""
 
     return f"""
 You are an experienced Arabic teacher marking a student's handwritten work.
@@ -378,7 +382,7 @@ You must produce feedback in EXACTLY the same style as this teacher example:
 
 TEACHER STYLE EXAMPLE:
 ★ Amazing informations expressed clearly using past tense
-★ Nice opening & closure  
+★ Nice opening & closure
 ★ Excellent use of time adverbs & connectives
 ↗ Even better if you use different subjects (family members)
 ↗ Even better if you add more descriptive adjectives like كبير، جميل
@@ -392,47 +396,103 @@ YOUR FEEDBACK MUST:
    - If rubric gap → suggest next rubric level improvement
    - Start each with "Even better if you use..." or "Even better if you..."
 4. Be SHORT and punchy — no long paragraphs, just clear bullet points
-5. Identify ONLY TRUE Arabic spelling mistakes (wrong Arabic → correct Arabic). CRITICAL RULES:
-   - ONLY flag Arabic words written INCORRECTLY in Arabic script → correct Arabic
-   - NEVER flag English words → Arabic corrections
-   - NEVER flag romanised/transliterated words (e.g. "akhtar", "bahar") — these are OCR artifacts, ignore completely
-   - IGNORE hamza differences (أ vs ا vs إ vs آ) — do NOT correct these
-   - IGNORE ة vs ه at word endings — do NOT correct these
-   - IGNORE ى vs ي at word endings — do NOT correct these
-   - ONLY flag clear letter-body errors: wrong consonant used, missing letter, extra letter, wrong dot placement changing meaning
-   - Predict what the student INTENDED based on word bank vocabulary, topic, and success criteria context
-   - Maximum 5 corrections, all must be Arabic→Arabic
-6. Generate "NEXT STEPS" - 2-3 specific, achievable targets based on:
-   - Unmet success criteria that the student has NOT already done
-   - Unused word bank vocabulary (specific Arabic words)
-   - Next rubric level requirements
-   - CRITICAL: Do NOT suggest things the student already did in their writing
-   - CRITICAL: Read the writing carefully — if student already used connectives, do NOT tell them to use connectives
-   - CRITICAL: Each next step must be something GENUINELY missing from the writing
+5. Identify ONLY TRUE Arabic spelling mistakes — follow the rules below STRICTLY
+6. Generate "NEXT STEPS" — 2-3 specific, achievable targets
 7. Be appropriate for Year {year} student ({year} years of Arabic)
 
-SCORING CALIBRATION — CRITICAL:
-- Score must reflect ACTUAL quality relative to {year} years of study
-- A student with {year} years of study who writes coherent sentences appropriate to their level should score AT LEAST Accomplished (8-9/15)
-- Do NOT default to Beginning unless the writing is genuinely very poor
-- Score generously for genuine effort and appropriate-level content
-- For Year {year}: if the student writes coherent on-topic sentences with some vocabulary, that is minimum Accomplished
-- Score breakdown: 5 categories × 3 points each = 15 total
-  * Beginning = 1pt per category
-  * Developing = 1.5pt per category
-  * Accomplished = 2pt per category
-  * Advanced = 2.5pt per category
-  * Exemplary = 3pt per category
-- Add up the ACTUAL per-category scores to get the total — do not under-score
+════════════════════════════════════════════
+SCORING CALIBRATION — READ CAREFULLY
+════════════════════════════════════════════
+Score must reflect ACTUAL quality relative to {year} years of study.
+
+IMPORTANT SCORING PHILOSOPHY:
+- A student who writes coherent, on-topic sentences appropriate for their level MUST score AT LEAST Accomplished (2pts per category, total ≥ 8/15)
+- Do NOT default to Beginning or Developing unless the writing is genuinely very poor for this level
+- Score GENEROUSLY for genuine effort and appropriate-level content
+- NEVER under-score because handwriting looks messy — only score the content
+- A student who attempts ALL required elements (even imperfectly) scores Accomplished or above
+- The score should feel ENCOURAGING and FAIR, not punishing
+
+Score breakdown: 5 categories × 3 points each = 15 total
+* Beginning   = 1pt per category   (genuinely very weak)
+* Developing  = 1.5pt per category (partial attempt, clear gaps)
+* Accomplished= 2pt per category   (meets main expectations for year level)
+* Advanced    = 2.5pt per category (above expectations)
+* Exemplary   = 3pt per category   (outstanding for year level)
+
+Add the per-category scores to get the total. Round to nearest 0.5.
+Default assumption: if writing is on-topic and has appropriate length → Accomplished minimum.
+
+════════════════════════════════════════════
+NEXT STEPS — ANTI-REPETITION RULES (CRITICAL)
+════════════════════════════════════════════
+BEFORE writing next steps, you MUST:
+1. READ the student writing very carefully
+2. Make a MENTAL LIST of what the student ALREADY did:
+   - Which tenses did they use?
+   - Which connectives did they use?
+   - How many lines did they write?
+   - Which word-bank words did they use?
+   - Did they write opinions, negation, adjectives?
+3. ONLY suggest things that are GENUINELY MISSING from their writing
+4. NEVER suggest something the student already did — this is the most important rule
+5. Each next step must be UNIQUE — no two next steps should say the same thing in different words
+6. Be SPECIFIC: name the exact Arabic word, tense, or structure they should add
+7. Maximum 3 next steps — quality over quantity
+
+BAD next steps (never write these if student already did them):
+✗ "Use connectives" — if they already used connectives
+✗ "Write more lines" — if they already meet the line count
+✗ "Use past tense" — if they already used past tense
+✗ "Add adjectives" — if they already used adjectives
+
+GOOD next steps (specific and genuinely missing):
+✓ "Add the connective بالإضافة إلى to link your second idea to your third"
+✓ "Try using future tense (سوف + verb) to say what you will do next time"
+✓ "Include the word bank word [specific word] to describe [specific thing]"
+
+════════════════════════════════════════════
+SPELLING CORRECTION RULES — STRICT
+════════════════════════════════════════════
+{"WORD BANK IS PRIMARY SOURCE: Compare student words against word-bank first." if word_bank.strip() else "No word bank — be very conservative, flag only obvious errors."}
+
+WHAT TO FLAG:
+- Student wrote an Arabic word in Arabic script with wrong letters (wrong consonant, missing letter, extra letter, wrong dot placement)
+- If word bank provided: student wrote a near-match to a word-bank word with spelling error
+
+WHAT TO IGNORE (NEVER FLAG):
+- English words, romanised words, transliterations (e.g. "akhtar", "malak") — OCR artifacts
+- Hamza differences: أ vs ا vs إ vs آ — do NOT correct these
+- ة vs ه at word endings — do NOT correct these
+- ى vs ي at word endings — do NOT correct these
+- Any word not in the word bank AND not a clear standard Arabic error
+- Maximum 5 corrections — if unsure, skip
+
+Output fields:
+- "wrong": the Arabic word as the student wrote it (Arabic script only)
+- "correct": the correct spelling (Arabic script only, from word bank if available)
+
+════════════════════════════════════════════
+EBI (EVEN BETTER IF) — RULES
+════════════════════════════════════════════
+- MAXIMUM 2 EBI points
+- Must come from: unmet SC, unused word bank words, or clear rubric gaps
+- Be specific and kind — start with "Even better if you..."
+- Do NOT repeat anything already in the next steps
+- Do NOT suggest something the student already did
 
 STUDENT: {first_name} (Year {year} — {year} years of Arabic study)
+LEVEL GUIDANCE: {level_note}
 
-LEVEL GUIDANCE:
-{level_note}
+LEARNING OBJECTIVE:
+{lo if lo.strip() else "Not provided."}
 
-LEARNING OBJECTIVE: {lo if lo.strip() else "Not provided."}
-SUCCESS CRITERIA: {sc if sc.strip() else "Not provided."}
-RUBRIC: {rubric}
+SUCCESS CRITERIA:
+{sc if sc.strip() else "Not provided."}
+
+RUBRIC:
+{rubric}
+
 {word_bank_section}
 
 STUDENT WRITING:
@@ -449,42 +509,15 @@ OUTPUT — return ONLY this JSON and nothing else (no markdown, no explanation):
   "score": {{"level": "Beginning/Developing/Accomplished/Advanced/Exemplary", "score": 0, "out_of": 15, "reason": "..."}}
 }}
 
-SPELLING RULES — STRICT:
-- "wrong" field: must be an Arabic word as written by student (in Arabic script only)
-- "correct" field: must be the correct Arabic spelling (in Arabic script only)
-- NEVER put English, romanised text, or transliterations in either field
-- If a word looks like English transliteration (e.g. "akhtar", "malak", "sama") → SKIP IT, it is an OCR error
-- Only flag words that are clearly written in Arabic script but have wrong letters
-- Predict the intended word using: word bank context, topic, success criteria, surrounding words
-- Maximum 5 entries, only genuine Arabic→Arabic corrections
-
-NEXT STEPS RULES — CRITICAL:
-- Read the student writing VERY carefully first
-- List what structures/words the student ALREADY used
-- Only suggest things that are GENUINELY MISSING
-- NEVER suggest "use connectives" if student already used connectives
-- NEVER suggest "use past tense" if student already used past tense
-- NEVER suggest "write more lines" if student already meets the line count
-- Be specific: name the EXACT Arabic word or structure they should add
-- Example good next step: "Add the connective بالإضافة إلى to link your ideas"
-- Example bad next step: "Use more connectives" (too vague, might repeat what they did)
-
 WWW RULES:
 - 2-3 specific strengths referencing ACTUAL words or sentences from the writing
-- MUST mention any word bank words they successfully used
+- MUST mention any word-bank words they successfully used
 - Be encouraging but grounded in what they actually wrote
-
-EBI RULES:
-- MAXIMUM 2 points
-- Must come from: unmet SC, unused word bank, or rubric gaps
-- Be specific and kind — start with "Even better if you..."
 
 Keep everything age-appropriate for Year {year}.
 """
 
-
-# ── API Keys from Secrets File ──────────────────────────────────────────────
-
+# ── API Keys from Secrets File ────────────────────────────────────────────────
 def _secret(key: str) -> str:
     try:
         return st.secrets.get(key, "")
@@ -503,16 +536,13 @@ def get_groq_api_key() -> str:
         raise ValueError("❌ GROQ_API_KEY not found! Please add it to .streamlit/secrets.toml")
     return key
 
-
 # ══════════════════════════════════════════════════════════════
 # CACHE & RATE LIMITER
 # ══════════════════════════════════════════════════════════════
-
 MAX_OCR_PER_DAY    = 1500
 MAX_ASSESS_PER_DAY = 1500
 RATE_LIMIT_WINDOW  = 60
 MAX_CALLS_PER_MIN  = 14
-
 
 def _get_usage() -> dict:
     today = str(date.today())
@@ -520,11 +550,9 @@ def _get_usage() -> dict:
         st.session_state["usage"] = {"date": today, "ocr": 0, "assess": 0}
     return st.session_state["usage"]
 
-
 def _increment_usage(kind: str):
     usage = _get_usage()
     usage[kind] = usage.get(kind, 0) + 1
-
 
 def _check_limit(kind: str):
     usage = _get_usage()
@@ -532,7 +560,6 @@ def _check_limit(kind: str):
     count = usage.get(kind, 0)
     if count >= limit:
         raise RuntimeError(f"⛔ Daily limit reached ({count}/{limit}). Resets tomorrow at midnight.")
-
 
 def _rate_limit():
     if "rate_calls" not in st.session_state:
@@ -544,81 +571,103 @@ def _rate_limit():
         raise RuntimeError(f"⏳ Too many requests. Please wait {int(wait)+1} seconds and try again.")
     st.session_state["rate_calls"].append(now)
 
-
 def _image_hash(uploaded_file) -> str:
     uploaded_file.seek(0)
     data = uploaded_file.read()
     uploaded_file.seek(0)
     return hashlib.md5(data).hexdigest()
 
-
 def _get_ocr_cache() -> dict:
     if "ocr_cache" not in st.session_state:
         st.session_state["ocr_cache"] = {}
     return st.session_state["ocr_cache"]
-
 
 def _get_assess_cache() -> dict:
     if "assess_cache" not in st.session_state:
         st.session_state["assess_cache"] = {}
     return st.session_state["assess_cache"]
 
-
+# =============================================
+# FILE → PIL IMAGE CONVERSION
+# Accepts: JPG, PNG, HEIC, WEBP, BMP, PDF,
+#          DOCX, DOC, TXT, CSV
+# =============================================
 def convert_to_pil_image(uploaded_file) -> list:
-    """Convert any uploaded file (HEIC, PDF, JPG, PNG, DOCX, etc.) to a list of PIL Images."""
+    """
+    Convert ANY uploaded file to a list of PIL Images for OCR.
+    Plain-text formats (DOCX/TXT/CSV) are handled separately upstream;
+    this function handles image and PDF paths only.
+    """
     filename = uploaded_file.name.lower()
     images = []
 
+    # ── PDF ────────────────────────────────────────────────────────────────
     if filename.endswith(".pdf"):
-        if PDF_SUPPORTED:
-            data = uploaded_file.read()
-            doc = fitz.open(stream=data, filetype="pdf")
-            for page in doc:
-                pix = page.get_pixmap(dpi=200)
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                images.append(img)
-        else:
-            raise ValueError("PDF support not available. Please install PyMuPDF.")
-    elif filename.endswith(".docx") or filename.endswith(".doc"):
-        # For DOCX: extract text directly
-        if DOCX_SUPPORTED:
-            data = uploaded_file.read()
-            doc = python_docx.Document(io.BytesIO(data))
-            text = "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
-            # Create a white image with the text rendered on it via PIL
-            from PIL import ImageDraw, ImageFont
-            img = Image.new("RGB", (800, max(400, len(text.split('\n')) * 30 + 60)), color="white")
-            draw = ImageDraw.Draw(img)
-            y = 20
-            for line in text.split('\n'):
-                draw.text((20, y), line, fill="black")
-                y += 28
+        if not PDF_SUPPORTED:
+            raise ValueError("PDF support not available. Please install PyMuPDF: pip install pymupdf")
+        uploaded_file.seek(0)
+        data = uploaded_file.read()
+        doc = fitz.open(stream=data, filetype="pdf")
+        for page in doc:
+            pix = page.get_pixmap(dpi=200)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             images.append(img)
-        else:
+        return images
+
+    # ── DOCX / DOC ─────────────────────────────────────────────────────────
+    if filename.endswith(".docx") or filename.endswith(".doc"):
+        if not DOCX_SUPPORTED:
             raise ValueError("DOCX support not available. Please install python-docx.")
-    else:
-        img = Image.open(uploaded_file)
-        if img.mode != "RGB":
-            img = img.convert("RGB")
+        uploaded_file.seek(0)
+        data = uploaded_file.read()
+        doc = python_docx.Document(io.BytesIO(data))
+        text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+        from PIL import ImageDraw
+        img = Image.new("RGB", (900, max(500, len(text.split('\n')) * 32 + 80)), color="white")
+        draw = ImageDraw.Draw(img)
+        y = 20
+        for line in text.split('\n'):
+            draw.text((20, y), line, fill="black")
+            y += 30
         images.append(img)
+        return images
 
+    # ── TXT / CSV ──────────────────────────────────────────────────────────
+    if filename.endswith(".txt") or filename.endswith(".csv"):
+        uploaded_file.seek(0)
+        text = uploaded_file.read().decode("utf-8", errors="ignore")
+        from PIL import ImageDraw
+        lines = text.split('\n')
+        img = Image.new("RGB", (900, max(500, len(lines) * 32 + 80)), color="white")
+        draw = ImageDraw.Draw(img)
+        y = 20
+        for line in lines:
+            draw.text((20, y), line, fill="black")
+            y += 30
+        images.append(img)
+        return images
+
+    # ── All image formats (JPG, PNG, HEIC, WEBP, BMP, etc.) ───────────────
+    uploaded_file.seek(0)
+    img = Image.open(uploaded_file)
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    images.append(img)
     return images
-
 
 def extract_text_from_docx(uploaded_file) -> str:
     """Extract text directly from a DOCX file without OCR."""
     if DOCX_SUPPORTED:
+        uploaded_file.seek(0)
         data = uploaded_file.read()
         doc = python_docx.Document(io.BytesIO(data))
-        return "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
+        return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
     raise ValueError("python-docx not installed.")
-
 
 def pil_image_to_base64(img) -> str:
     buffer = io.BytesIO()
     img.convert("RGB").save(buffer, format="JPEG", quality=90)
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
-
 
 def _list_gemini_models(api_key: str) -> list:
     url = f"https://generativelanguage.googleapis.com/v1/models?key={api_key}"
@@ -636,55 +685,26 @@ def _list_gemini_models(api_key: str) -> list:
         pass
     return []
 
-
 def _preprocess_image_for_ocr(img: Image.Image) -> Image.Image:
-    """
-    Enhance a PIL image for better Arabic handwriting OCR:
-    - Convert to grayscale then back to RGB
-    - Increase contrast sharply
-    - Sharpen edges
-    - Upscale if too small (keeps fine strokes visible)
-    - Keep as JPEG-compatible RGB for Gemini
-    """
     from PIL import ImageEnhance, ImageFilter
-
-    # Upscale small images so letter details are visible
     w, h = img.size
     if max(w, h) < 1200:
         scale = 1200 / max(w, h)
         img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-
-    # Greyscale → back to RGB (strips colour noise, improves contrast detection)
     grey = img.convert("L")
-
-    # Strong contrast boost
     grey = ImageEnhance.Contrast(grey).enhance(2.2)
-
-    # Sharpness boost — helps with faint strokes and dots
     grey = ImageEnhance.Sharpness(grey).enhance(3.0)
-
-    # Edge-enhance filter to make letter strokes crisper
     grey = grey.filter(ImageFilter.EDGE_ENHANCE_MORE)
-
-    # Back to RGB for Gemini
     return grey.convert("RGB")
-
 
 def _gemini_ocr_rest(img_b64: str, api_key: str, model: str, prompt: str) -> str:
     url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={api_key}"
     payload = {
-        "contents": [{
-            "parts": [
-                {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
-                {"text": prompt}
-            ]
-        }],
-        "generationConfig": {
-            "temperature": 0.1,   # Lower = more deterministic / faithful transcription
-            "topP": 0.95,
-            "topK": 40,
-            "maxOutputTokens": 2048
-        }
+        "contents": [{"parts": [
+            {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
+            {"text": prompt}
+        ]}],
+        "generationConfig": {"temperature": 0.1, "topP": 0.95, "topK": 40, "maxOutputTokens": 2048}
     }
     resp = _requests.post(url, json=payload, timeout=45)
     if resp.status_code != 200:
@@ -692,11 +712,10 @@ def _gemini_ocr_rest(img_b64: str, api_key: str, model: str, prompt: str) -> str
     data = resp.json()
     return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
-
-# ── OCR prompt — multi-pass strategy ─────────────────────────────────────────
+# ── OCR prompt ────────────────────────────────────────────────────────────────
 _OCR_PROMPT = """
-You are an EXPERT Arabic handwriting recognition system. Your ONLY job is to read what
-a non-native Arabic student wrote by hand and transcribe it faithfully.
+You are an EXPERT Arabic handwriting recognition system. Your ONLY job is to read what a
+non-native Arabic student wrote by hand and transcribe it faithfully.
 
 ══════════════════════════════════════════════════════
 STEP 1 — SCAN THE WHOLE PAGE FIRST
@@ -704,55 +723,34 @@ STEP 1 — SCAN THE WHOLE PAGE FIRST
 Before reading individual words:
 • Count the lines. Note where each line starts and ends (right to left).
 • Identify any title or heading written larger/above the main text.
-• Note the approximate topic (school, family, food, weather, hobbies…) from
-  any clearly readable words — this context helps you decode unclear words.
+• Note the approximate topic from any clearly readable words — this context helps decode unclear words.
 
 ══════════════════════════════════════════════════════
 STEP 2 — READ LINE BY LINE, RIGHT TO LEFT
 ══════════════════════════════════════════════════════
 For each line, read every word in RIGHT-TO-LEFT order (Arabic direction).
 
-LETTER READING RULES — apply in this order:
-1. POSITION: determine if the letter is word-initial / medial / final — each
-   Arabic letter has a different shape per position. Use this to narrow options.
+LETTER READING RULES:
+1. POSITION: determine if the letter is word-initial/medial/final — each Arabic letter has a different shape.
 2. BASELINE SHAPE: identify the core skeleton of the letter ignoring dots.
-3. DOTS: count dots and their position (above / below). Dots are the primary
-   differentiator between: ب(1↓) ت(2↑) ث(3↑) | ج(1↓) ح(none) خ(1↑) |
-   د/ذ(1↑) | ر/ز(1↑) | س/ش(3↑) | ص/ض(1↑) | ط/ظ(1↑) | ع/غ(1↑) |
-   ف(1↑) ق(2↑) | ن(1↑) ي/ى(2↓)
-4. STUDENT DOT ERRORS: non-native students often misplace dots or forget them.
-   If the skeleton matches a known Arabic word in context, accept it even if
-   dots are wrong — transcribe what you see (wrong dots included).
-5. CONTEXT RECOVERY: if a word is ambiguous, pick the reading that makes the
-   most grammatical and topical sense given the surrounding words.
+3. DOTS: count dots and their position (above/below).
+4. STUDENT DOT ERRORS: non-native students often misplace dots — accept it even if dots are wrong.
+5. CONTEXT RECOVERY: if a word is ambiguous, pick the reading that makes grammatical/topical sense.
 
-COMMON STUDENT ERRORS TO EXPECT & PRESERVE (do NOT correct):
-  • ة written as ه at word-end (or vice-versa)
-  • ى / ي confusion at word-end
-  • Hamza missing or wrong (أ إ آ ء ؤ ئ all accepted as written)
-  • Doubled vowel letters (اا, وو, يي) as lengthening errors
-  • Letters run together when they shouldn't
-  • Extra spacing in the middle of a word
-  • Missing dots on ن ي ت ث etc.
-  • Connected letters that should be separate (e.g. وأنا written as واﻧﺎ)
+COMMON STUDENT ERRORS TO PRESERVE (do NOT correct):
+• ة written as ه at word-end (or vice-versa)
+• ى/ي confusion at word-end
+• Hamza missing or wrong (أ إ آ ء ؤ ئ all accepted as written)
+• Missing dots on ن ي ت ث etc.
+• Connected letters that should be separate
 
-EXTREMELY UNCLEAR LETTERS:
-  → Make your best guess from context.
-  → Only use [?] if you truly cannot determine even the approximate letter.
-
-══════════════════════════════════════════════════════
-STEP 3 — VERIFY EACH LINE
-══════════════════════════════════════════════════════
-After transcribing each line, re-read it mentally:
-  • Does it flow as Arabic? (subject → verb → object structure is common)
-  • Are word lengths plausible for common beginner vocabulary?
-  • Fix any obvious left-to-right reversal errors you made during reading.
+EXTREMELY UNCLEAR LETTERS: make your best guess from context. Only use [?] if truly impossible.
 
 ══════════════════════════════════════════════════════
 OUTPUT FORMAT — STRICT
 ══════════════════════════════════════════════════════
 • Output ONLY the Arabic text. One transcribed line per written line.
-• NO English words. NO explanations. NO tashkeel unless clearly visible in the image.
+• NO English words. NO explanations. NO tashkeel unless clearly visible.
 • NO corrections — preserve every student error exactly as written.
 • NO comments, notes, or confidence scores.
 • If a page has a title/heading, put it on its own line first.
@@ -761,35 +759,37 @@ OUTPUT FORMAT — STRICT
 NOW READ THE HANDWRITING IN THE IMAGE:
 """
 
-
+# =============================================
+# MAIN OCR FUNCTION
+# Accepts ALL file types
+# =============================================
 def extract_arabic_from_image_gemini(uploaded_file) -> str:
-    """ENHANCED OCR for Arabic handwriting — accepts all file types."""
+    """
+    Universal OCR / text-extraction for ANY file type:
+    - DOCX / DOC → direct text extraction (no OCR)
+    - TXT / CSV   → direct UTF-8 read
+    - PDF         → render each page → Gemini OCR
+    - Images (JPG, PNG, HEIC, WEBP, BMP, etc.) → Gemini OCR
+    """
     filename = uploaded_file.name.lower()
 
-    # ── Plain-text formats: no OCR needed ────────────────────────────────────
+    # ── Plain-text formats: no OCR needed ────────────────────────────────
     if filename.endswith(".docx") or filename.endswith(".doc"):
         try:
             text = extract_text_from_docx(uploaded_file)
             if text.strip():
                 return text
         except Exception:
-            pass
+            pass  # Fall through to image-based OCR as last resort
 
-    if filename.endswith(".txt"):
+    if filename.endswith(".txt") or filename.endswith(".csv"):
         try:
             uploaded_file.seek(0)
             return uploaded_file.read().decode("utf-8", errors="ignore")
         except Exception:
             pass
 
-    if filename.endswith(".csv"):
-        try:
-            uploaded_file.seek(0)
-            return uploaded_file.read().decode("utf-8", errors="ignore")
-        except Exception:
-            pass
-
-    # ── Image / PDF path ─────────────────────────────────────────────────────
+    # ── Image / PDF path ─────────────────────────────────────────────────
     file_hash = _image_hash(uploaded_file)
     cache = _get_ocr_cache()
     if file_hash in cache:
@@ -800,7 +800,7 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
 
     api_key = get_google_api_key()
     discovered = _list_gemini_models(api_key)
-    # Prefer flash-2 models — best vision quality for handwriting
+
     preferred = [
         "gemini-2.0-flash-exp",
         "gemini-2.0-flash",
@@ -808,22 +808,22 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
         "gemini-1.5-flash-002",
         "gemini-1.5-flash",
     ]
-    # Put discovered preferred models first, then any other discovered, then fallback
-    ordered = [m for m in preferred if m in discovered] + \
-              [m for m in discovered if m not in preferred] + \
-              [m for m in preferred if m not in discovered]
-    models_to_try = ordered[:6]  # try up to 6
+    ordered = (
+        [m for m in preferred if m in discovered]
+        + [m for m in discovered if m not in preferred]
+        + [m for m in preferred if m not in discovered]
+    )
+    models_to_try = ordered[:6]
 
     raw_images = convert_to_pil_image(uploaded_file)
     last_error = None
     all_text = []
 
     for img in raw_images:
-        # ── Preprocess: enhance contrast / sharpness for better letter detection ──
         enhanced_img = _preprocess_image_for_ocr(img)
         img_b64 = pil_image_to_base64(enhanced_img)
-
         page_text = None
+
         for model_name in models_to_try:
             try:
                 page_text = _gemini_ocr_rest(img_b64, api_key, model_name, _OCR_PROMPT)
@@ -832,7 +832,7 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
                 last_error = e
                 continue
 
-        # ── If enhanced version failed, retry with original (unprocessed) ──
+        # Retry with original (unprocessed) image if enhanced failed
         if not page_text:
             orig_b64 = pil_image_to_base64(img)
             for model_name in models_to_try:
@@ -852,7 +852,6 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
     cache[file_hash] = result
     _increment_usage("ocr")
     return result
-
 
 def smart_spelling_matcher(writing: str, word_bank: str) -> list:
     if not word_bank.strip():
@@ -893,7 +892,6 @@ def smart_spelling_matcher(writing: str, word_bank: str) -> list:
     corrections.sort(key=lambda x: (x["priority"] == "medium", x["distance"]))
     return corrections[:7]
 
-
 def assess_with_gemini(prompt: str) -> str:
     prompt_hash = hashlib.md5(prompt.encode()).hexdigest()
     cache = _get_assess_cache()
@@ -907,6 +905,7 @@ def assess_with_gemini(prompt: str) -> str:
     client = Groq(api_key=api_key)
     models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "mixtral-8x7b-32768"]
     last_error = None
+
     for model_name in models_to_try:
         try:
             response = client.chat.completions.create(
@@ -922,13 +921,12 @@ def assess_with_gemini(prompt: str) -> str:
         except Exception as e:
             last_error = e
             continue
-    raise RuntimeError(f"All assessment models failed. Last error: {last_error}")
 
+    raise RuntimeError(f"All assessment models failed. Last error: {last_error}")
 
 # =============================================
 # STREAMLIT UI
 # =============================================
-
 st.set_page_config(
     page_title="مُقيِّم الكتابة العربية",
     page_icon="🌙",
@@ -939,371 +937,296 @@ st.set_page_config(
 with st.sidebar:
     st.markdown("### 📊 Daily Usage")
     usage = _get_usage()
-
-    ocr_count = usage.get("ocr", 0)
+    ocr_count    = usage.get("ocr", 0)
     assess_count = usage.get("assess", 0)
-    ocr_pct = int(ocr_count / MAX_OCR_PER_DAY * 100)
+    ocr_pct    = int(ocr_count    / MAX_OCR_PER_DAY    * 100)
     assess_pct = int(assess_count / MAX_ASSESS_PER_DAY * 100)
-
-    ocr_color = "#d4af37" if ocr_pct < 70 else ("#ff9900" if ocr_pct < 90 else "#ff4444")
+    ocr_color    = "#d4af37" if ocr_pct    < 70 else ("#ff9900" if ocr_pct    < 90 else "#ff4444")
     assess_color = "#d4af37" if assess_pct < 70 else ("#ff9900" if assess_pct < 90 else "#ff4444")
-
     st.markdown(f"""
     <div style="font-family:'Tajawal',sans-serif;font-size:13px;color:rgba(220,205,185,0.85)">
-        <div style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                <span>📷 Image OCR</span>
-                <span style="color:{ocr_color};font-weight:700">{ocr_count} / {MAX_OCR_PER_DAY}</span>
-            </div>
-            <div style="background:rgba(255,255,255,0.07);border-radius:6px;height:6px;overflow:hidden">
-                <div style="width:{ocr_pct}%;height:100%;background:{ocr_color};border-radius:6px;transition:width .3s"></div>
-            </div>
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>📷 Image OCR</span>
+          <span style="color:{ocr_color};font-weight:700">{ocr_count} / {MAX_OCR_PER_DAY}</span>
         </div>
-        <div style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                <span>✍️ Assessments</span>
-                <span style="color:{assess_color};font-weight:700">{assess_count} / {MAX_ASSESS_PER_DAY}</span>
-            </div>
-            <div style="background:rgba(255,255,255,0.07);border-radius:6px;height:6px;overflow:hidden">
-                <div style="width:{assess_pct}%;height:100%;background:{assess_color};border-radius:6px;transition:width .3s"></div>
-            </div>
+        <div style="background:rgba(255,255,255,0.07);border-radius:6px;height:6px;overflow:hidden">
+          <div style="width:{ocr_pct}%;height:100%;background:{ocr_color};border-radius:6px;transition:width .3s"></div>
         </div>
-        <div style="font-size:11px;color:rgba(212,175,55,0.4);margin-top:6px">🔄 Resets daily at midnight</div>
-        <div style="font-size:11px;color:rgba(100,220,100,0.5);margin-top:3px">💾 Cached results don't count</div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>✍️ Assessments</span>
+          <span style="color:{assess_color};font-weight:700">{assess_count} / {MAX_ASSESS_PER_DAY}</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.07);border-radius:6px;height:6px;overflow:hidden">
+          <div style="width:{assess_pct}%;height:100%;background:{assess_color};border-radius:6px;transition:width .3s"></div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:rgba(212,175,55,0.4);margin-top:6px">🔄 Resets daily at midnight</div>
+      <div style="font-size:11px;color:rgba(100,220,100,0.5);margin-top:3px">💾 Cached results don't count</div>
     </div>
     """, unsafe_allow_html=True)
     st.divider()
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cinzel+Decorative:wght@700&family=Tajawal:wght@300;400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cinzel+Decorative:wght@700&family=Tajawal:wght@300;400;700;900&display=swap');
 
-    .stApp {
-        background: #06050f;
-        min-height: 100vh;
-        perspective: 1200px;
-    }
+.stApp {
+  background: #06050f;
+  min-height: 100vh;
+  perspective: 1200px;
+}
+.stApp::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(120,60,200,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(212,175,55,0.12) 0%, transparent 50%),
+    radial-gradient(ellipse 100% 80% at 50% 50%, rgba(10,5,30,0.95) 0%, #06050f 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+.stApp::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cg fill='none' stroke='rgba(212,175,55,0.07)' stroke-width='0.5'%3E%3Cpolygon points='40,4 52,28 76,28 56,44 64,68 40,54 16,68 24,44 4,28 28,28'/%3E%3Crect x='20' y='20' width='40' height='40' transform='rotate(45 40 40)'/%3E%3Ccircle cx='40' cy='40' r='18'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 1;
+  pointer-events: none;
+  z-index: 0;
+}
+.main .block-container { position: relative; z-index: 1; }
 
-    .stApp::before {
-        content: '';
-        position: fixed;
-        inset: 0;
-        background:
-            radial-gradient(ellipse 80% 50% at 20% 20%, rgba(120,60,200,0.18) 0%, transparent 60%),
-            radial-gradient(ellipse 60% 40% at 80% 80%, rgba(212,175,55,0.12) 0%, transparent 50%),
-            radial-gradient(ellipse 100% 80% at 50% 50%, rgba(10,5,30,0.95) 0%, #06050f 100%);
-        pointer-events: none;
-        z-index: 0;
-    }
+.hero-banner {
+  background: linear-gradient(160deg, rgba(30,12,60,0.97) 0%, rgba(50,20,90,0.95) 40%, rgba(25,10,50,0.97) 100%);
+  border: 1px solid rgba(212,175,55,0.5);
+  border-radius: 24px;
+  padding: 3rem 2rem 2.5rem;
+  margin-bottom: 2.5rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(212,175,55,0.15), 0 30px 80px rgba(0,0,0,0.7),
+              0 0 60px rgba(120,60,200,0.15), inset 0 1px 0 rgba(212,175,55,0.4),
+              inset 0 -1px 0 rgba(212,175,55,0.1);
+  transform: perspective(800px) rotateX(1deg);
+}
+.hero-banner::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 10%; right: 10%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.3) 20%, #d4af37 50%, rgba(212,175,55,0.3) 80%, transparent 100%);
+  border-radius: 0 0 50% 50%;
+}
+.hero-arabic {
+  font-family: 'Amiri', serif;
+  font-size: 3.2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #f0d060 0%, #d4af37 40%, #c49a20 70%, #e8c84a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 2px 12px rgba(212,175,55,0.5));
+  margin: 0;
+  line-height: 1.4;
+  letter-spacing: 2px;
+  animation: shimmer 4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%, 100% { filter: drop-shadow(0 2px 12px rgba(212,175,55,0.4)); }
+  50%       { filter: drop-shadow(0 2px 24px rgba(212,175,55,0.8)); }
+}
+.hero-english {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 0.95rem;
+  color: rgba(212,175,55,0.75);
+  margin-top: 0.6rem;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+}
+.section-title {
+  font-family: 'Tajawal', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #d4af37;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 1px;
+  text-shadow: 0 0 20px rgba(212,175,55,0.3);
+}
+.rubric-badge {
+  background: linear-gradient(135deg, rgba(212,175,55,0.12), rgba(212,175,55,0.04));
+  border: 1px solid rgba(212,175,55,0.4);
+  border-left: 3px solid #d4af37;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  font-family: 'Tajawal', sans-serif;
+  font-size: 0.9rem;
+  color: #d4af37;
+  margin-top: 0.5rem;
+  box-shadow: 0 4px 20px rgba(212,175,55,0.08), inset 0 1px 0 rgba(212,175,55,0.1);
+}
+.stTextInput input, .stTextArea textarea {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(212,175,55,0.25) !important;
+  border-radius: 12px !important;
+  color: #ede0c8 !important;
+  font-family: 'Tajawal', sans-serif !important;
+  font-size: 1rem !important;
+  transition: all 0.3s ease !important;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.04) !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus {
+  border-color: rgba(212,175,55,0.7) !important;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.2), 0 0 0 2px rgba(212,175,55,0.15), 0 0 20px rgba(212,175,55,0.1) !important;
+  background: rgba(255,255,255,0.06) !important;
+}
+.stButton > button {
+  background: linear-gradient(160deg, #f0d060 0%, #d4af37 35%, #b8941f 70%, #9a7a10 100%) !important;
+  color: #0d0a02 !important;
+  font-family: 'Tajawal', sans-serif !important;
+  font-weight: 900 !important;
+  font-size: 1.05rem !important;
+  letter-spacing: 3px !important;
+  border: none !important;
+  border-radius: 14px !important;
+  padding: 0.85rem 2.5rem !important;
+  box-shadow: 0 8px 0 #5a4000, 0 10px 30px rgba(0,0,0,0.6), 0 0 0 1px rgba(212,175,55,0.3),
+              inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -2px 0 rgba(0,0,0,0.2) !important;
+  transform: perspective(200px) rotateX(3deg) translateY(0) !important;
+  transition: all 0.12s ease !important;
+  text-transform: uppercase !important;
+}
+.stButton > button:hover {
+  background: linear-gradient(160deg, #f8e070 0%, #e8c84a 35%, #d4af37 70%, #b8941f 100%) !important;
+  box-shadow: 0 5px 0 #5a4000, 0 7px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(212,175,55,0.4),
+              inset 0 2px 0 rgba(255,255,255,0.4), 0 0 30px rgba(212,175,55,0.2) !important;
+  transform: perspective(200px) rotateX(3deg) translateY(3px) !important;
+}
+.stTabs [data-baseweb="tab-list"] {
+  background: rgba(10,5,25,0.6) !important;
+  border-radius: 14px !important;
+  padding: 4px !important;
+  border: 1px solid rgba(212,175,55,0.2) !important;
+  gap: 4px !important;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.4) !important;
+}
+.stTabs [data-baseweb="tab"] {
+  font-family: 'Tajawal', sans-serif !important;
+  font-weight: 700 !important;
+  color: rgba(212,175,55,0.5) !important;
+  border-radius: 10px !important;
+  padding: 0.5rem 1.2rem !important;
+  transition: all 0.25s ease !important;
+}
+.stTabs [aria-selected="true"] {
+  background: linear-gradient(135deg, rgba(212,175,55,0.22), rgba(212,175,55,0.08)) !important;
+  color: #d4af37 !important;
+  box-shadow: 0 2px 8px rgba(212,175,55,0.15), inset 0 1px 0 rgba(212,175,55,0.3) !important;
+}
+.stTextInput label, .stTextArea label, .stSlider label,
+.stFileUploader label, .stToggle label {
+  font-family: 'Tajawal', sans-serif !important;
+  font-weight: 700 !important;
+  color: rgba(212,175,55,0.9) !important;
+  font-size: 0.92rem !important;
+  letter-spacing: 0.5px !important;
+}
+p, .stMarkdown p, .stCaption { color: rgba(220,205,185,0.85) !important; font-family: 'Tajawal', sans-serif !important; }
+[data-testid="stFileUploader"] {
+  border: 1px dashed rgba(212,175,55,0.3) !important;
+  border-radius: 14px !important;
+  padding: 0.6rem !important;
+  background: rgba(212,175,55,0.02) !important;
+  transition: all 0.3s ease !important;
+}
+[data-testid="stFileUploader"]:hover {
+  border-color: rgba(212,175,55,0.55) !important;
+  background: rgba(212,175,55,0.04) !important;
+}
+textarea {
+  direction: rtl !important;
+  text-align: right !important;
+  unicode-bidi: plaintext !important;
+  font-family: 'Amiri', 'Tajawal', 'Arial Unicode MS', Arial, sans-serif !important;
+  font-size: 1.05rem !important;
+  line-height: 1.9 !important;
+  letter-spacing: 0.5px !important;
+}
+input[type="text"] { direction: ltr !important; text-align: left !important; }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.01); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(212,175,55,0.4), rgba(212,175,55,0.2));
+  border-radius: 3px;
+}
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #0d0820 0%, #080514 100%) !important;
+  border-right: 1px solid rgba(212,175,55,0.2) !important;
+}
+#MainMenu { visibility: hidden; }
+footer    { visibility: hidden; }
+[data-testid="stToolbar"] { display: none; }
 
-    .stApp::after {
-        content: '';
-        position: fixed;
-        inset: 0;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cg fill='none' stroke='rgba(212,175,55,0.07)' stroke-width='0.5'%3E%3Cpolygon points='40,4 52,28 76,28 56,44 64,68 40,54 16,68 24,44 4,28 28,28'/%3E%3Crect x='20' y='20' width='40' height='40' transform='rotate(45 40 40)'/%3E%3Ccircle cx='40' cy='40' r='18'/%3E%3C/g%3E%3C/svg%3E");
-        opacity: 1;
-        pointer-events: none;
-        z-index: 0;
-    }
-
-    .main .block-container { position: relative; z-index: 1; }
-
-    .hero-banner {
-        background: linear-gradient(160deg,
-            rgba(30,12,60,0.97) 0%,
-            rgba(50,20,90,0.95) 40%,
-            rgba(25,10,50,0.97) 100%);
-        border: 1px solid rgba(212,175,55,0.5);
-        border-radius: 24px;
-        padding: 3rem 2rem 2.5rem;
-        margin-bottom: 2.5rem;
-        text-align: center;
-        position: relative;
-        overflow: hidden;
-        box-shadow:
-            0 0 0 1px rgba(212,175,55,0.15),
-            0 30px 80px rgba(0,0,0,0.7),
-            0 0 60px rgba(120,60,200,0.15),
-            inset 0 1px 0 rgba(212,175,55,0.4),
-            inset 0 -1px 0 rgba(212,175,55,0.1);
-        transform: perspective(800px) rotateX(1deg);
-    }
-
-    .hero-banner::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 10%; right: 10%;
-        height: 3px;
-        background: linear-gradient(90deg,
-            transparent 0%,
-            rgba(212,175,55,0.3) 20%,
-            #d4af37 50%,
-            rgba(212,175,55,0.3) 80%,
-            transparent 100%);
-        border-radius: 0 0 50% 50%;
-    }
-
-    .hero-arabic {
-        font-family: 'Amiri', serif;
-        font-size: 3.2rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #f0d060 0%, #d4af37 40%, #c49a20 70%, #e8c84a 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        filter: drop-shadow(0 2px 12px rgba(212,175,55,0.5));
-        margin: 0;
-        line-height: 1.4;
-        letter-spacing: 2px;
-        animation: shimmer 4s ease-in-out infinite;
-    }
-
-    @keyframes shimmer {
-        0%, 100% { filter: drop-shadow(0 2px 12px rgba(212,175,55,0.4)); }
-        50% { filter: drop-shadow(0 2px 24px rgba(212,175,55,0.8)); }
-    }
-
-    .hero-english {
-        font-family: 'Cinzel Decorative', serif;
-        font-size: 0.95rem;
-        color: rgba(212,175,55,0.75);
-        margin-top: 0.6rem;
-        letter-spacing: 5px;
-        text-transform: uppercase;
-    }
-
-    .section-title {
-        font-family: 'Tajawal', sans-serif;
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: #d4af37;
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        letter-spacing: 1px;
-        text-shadow: 0 0 20px rgba(212,175,55,0.3);
-    }
-
-    .rubric-badge {
-        background: linear-gradient(135deg, rgba(212,175,55,0.12), rgba(212,175,55,0.04));
-        border: 1px solid rgba(212,175,55,0.4);
-        border-left: 3px solid #d4af37;
-        padding: 0.7rem 1rem;
-        border-radius: 10px;
-        font-family: 'Tajawal', sans-serif;
-        font-size: 0.9rem;
-        color: #d4af37;
-        margin-top: 0.5rem;
-        box-shadow: 0 4px 20px rgba(212,175,55,0.08), inset 0 1px 0 rgba(212,175,55,0.1);
-    }
-
-    .stTextInput input, .stTextArea textarea {
-        background: rgba(255,255,255,0.04) !important;
-        border: 1px solid rgba(212,175,55,0.25) !important;
-        border-radius: 12px !important;
-        color: #ede0c8 !important;
-        font-family: 'Tajawal', sans-serif !important;
-        font-size: 1rem !important;
-        transition: all 0.3s ease !important;
-        box-shadow: inset 0 2px 8px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.04) !important;
-    }
-
-    .stTextInput input:focus, .stTextArea textarea:focus {
-        border-color: rgba(212,175,55,0.7) !important;
-        box-shadow:
-            inset 0 2px 8px rgba(0,0,0,0.2),
-            0 0 0 2px rgba(212,175,55,0.15),
-            0 0 20px rgba(212,175,55,0.1) !important;
-        background: rgba(255,255,255,0.06) !important;
-    }
-
-    .stButton > button {
-        background: linear-gradient(160deg,
-            #f0d060 0%,
-            #d4af37 35%,
-            #b8941f 70%,
-            #9a7a10 100%) !important;
-        color: #0d0a02 !important;
-        font-family: 'Tajawal', sans-serif !important;
-        font-weight: 900 !important;
-        font-size: 1.05rem !important;
-        letter-spacing: 3px !important;
-        border: none !important;
-        border-radius: 14px !important;
-        padding: 0.85rem 2.5rem !important;
-        box-shadow:
-            0 8px 0 #5a4000,
-            0 10px 30px rgba(0,0,0,0.6),
-            0 0 0 1px rgba(212,175,55,0.3),
-            inset 0 2px 0 rgba(255,255,255,0.35),
-            inset 0 -2px 0 rgba(0,0,0,0.2) !important;
-        transform: perspective(200px) rotateX(3deg) translateY(0) !important;
-        transition: all 0.12s ease !important;
-        text-transform: uppercase !important;
-    }
-
-    .stButton > button:hover {
-        background: linear-gradient(160deg,
-            #f8e070 0%,
-            #e8c84a 35%,
-            #d4af37 70%,
-            #b8941f 100%) !important;
-        box-shadow:
-            0 5px 0 #5a4000,
-            0 7px 20px rgba(0,0,0,0.5),
-            0 0 0 1px rgba(212,175,55,0.4),
-            inset 0 2px 0 rgba(255,255,255,0.4),
-            0 0 30px rgba(212,175,55,0.2) !important;
-        transform: perspective(200px) rotateX(3deg) translateY(3px) !important;
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-        background: rgba(10,5,25,0.6) !important;
-        border-radius: 14px !important;
-        padding: 4px !important;
-        border: 1px solid rgba(212,175,55,0.2) !important;
-        gap: 4px !important;
-        box-shadow: inset 0 2px 8px rgba(0,0,0,0.4) !important;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        font-family: 'Tajawal', sans-serif !important;
-        font-weight: 700 !important;
-        color: rgba(212,175,55,0.5) !important;
-        border-radius: 10px !important;
-        padding: 0.5rem 1.2rem !important;
-        transition: all 0.25s ease !important;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, rgba(212,175,55,0.22), rgba(212,175,55,0.08)) !important;
-        color: #d4af37 !important;
-        box-shadow:
-            0 2px 8px rgba(212,175,55,0.15),
-            inset 0 1px 0 rgba(212,175,55,0.3) !important;
-    }
-
-    .stTextInput label, .stTextArea label, .stSlider label, .stFileUploader label, .stToggle label {
-        font-family: 'Tajawal', sans-serif !important;
-        font-weight: 700 !important;
-        color: rgba(212,175,55,0.9) !important;
-        font-size: 0.92rem !important;
-        letter-spacing: 0.5px !important;
-    }
-
-    p, .stMarkdown p, .stCaption {
-        color: rgba(220,205,185,0.85) !important;
-        font-family: 'Tajawal', sans-serif !important;
-    }
-
-    [data-testid="stFileUploader"] {
-        border: 1px dashed rgba(212,175,55,0.3) !important;
-        border-radius: 14px !important;
-        padding: 0.6rem !important;
-        background: rgba(212,175,55,0.02) !important;
-        transition: all 0.3s ease !important;
-    }
-
-    [data-testid="stFileUploader"]:hover {
-        border-color: rgba(212,175,55,0.55) !important;
-        background: rgba(212,175,55,0.04) !important;
-    }
-
-    /* ── RTL for ALL textareas that contain Arabic content ── */
-    textarea {
-        direction: rtl !important;
-        text-align: right !important;
-        unicode-bidi: plaintext !important;
-        font-family: 'Amiri', 'Tajawal', 'Arial Unicode MS', Arial, sans-serif !important;
-        font-size: 1.05rem !important;
-        line-height: 1.9 !important;
-        letter-spacing: 0.5px !important;
-    }
-
-    /* Keep LTR for the student-name input (Latin text) */
-    input[type="text"] {
-        direction: ltr !important;
-        text-align: left !important;
-    }
-
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.01); }
-    ::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, rgba(212,175,55,0.4), rgba(212,175,55,0.2));
-        border-radius: 3px;
-    }
-
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0d0820 0%, #080514 100%) !important;
-        border-right: 1px solid rgba(212,175,55,0.2) !important;
-    }
-
-    #MainMenu { visibility: hidden; }
-    footer { visibility: hidden; }
-    [data-testid="stToolbar"] { display: none; }
-
-    /* ── Print styles: render ONLY .print-report at A5 ── */
-    @media print {
-        @page { size: A5 portrait; margin: 0; }
-
-        /* Hide everything */
-        body > * { display: none !important; }
-
-        /* Show only the report iframe contents */
-        iframe { display: block !important; border: none !important; }
-
-        /* Inside the iframe the .print-report is already the only content */
-        .print-report {
-            display: block !important;
-            position: fixed !important;
-            top: 0; left: 0;
-            width: 148mm !important;
-            min-height: 210mm !important;
-            margin: 0 !important;
-            padding: 10mm !important;
-            box-shadow: none !important;
-            border: none !important;
-            box-sizing: border-box !important;
-        }
-
-        .print-report button { display: none !important; }
-    }
+@media print {
+  @page { size: A5 portrait; margin: 0; }
+  body > * { display: none !important; }
+  iframe { display: block !important; border: none !important; }
+  .print-report {
+    display: block !important;
+    position: fixed !important;
+    top: 0; left: 0;
+    width: 148mm !important;
+    min-height: 210mm !important;
+    margin: 0 !important;
+    padding: 10mm !important;
+    box-shadow: none !important;
+    border: none !important;
+    box-sizing: border-box !important;
+  }
+  .print-report button { display: none !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ── Hero Banner ──
 st.markdown("""
 <div class="hero-banner">
-    <div style="font-family:'Amiri',serif;font-size:0.85rem;color:rgba(212,175,55,0.45);letter-spacing:12px;margin-bottom:0.6rem;">بِسْمِ اللَّهِ</div>
-    <div class="hero-arabic">مُقيِّم الكتابة العربية</div>
-    <div class="hero-english">Arabic Writing Assessor</div>
-    <div style="width:120px;height:1px;background:linear-gradient(90deg,transparent,rgba(212,175,55,0.5),transparent);margin:0.9rem auto;"></div>
-    <div style="font-family:'Tajawal',sans-serif;font-size:0.9rem;color:rgba(180,160,220,0.7);margin-top:0.8rem;">✦ &nbsp; Enhanced OCR • Smart Spelling • A5 Print Reports &nbsp; ✦</div>
+  <div style="font-family:'Amiri',serif;font-size:0.85rem;color:rgba(212,175,55,0.45);letter-spacing:12px;margin-bottom:0.6rem;">بِسْمِ اللَّهِ</div>
+  <div class="hero-arabic">مُقيِّم الكتابة العربية</div>
+  <div class="hero-english">Arabic Writing Assessor</div>
+  <div style="width:120px;height:1px;background:linear-gradient(90deg,transparent,rgba(212,175,55,0.5),transparent);margin:0.9rem auto;"></div>
+  <div style="font-family:'Tajawal',sans-serif;font-size:0.9rem;color:rgba(180,160,220,0.7);margin-top:0.8rem;">
+    ✦ &nbsp; Enhanced OCR • Smart Spelling • A5 Print Reports &nbsp; ✦
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Global RTL enforcer for all Arabic textareas ──────────────────────────
+# ── Global RTL enforcer ──
 components.html("""
 <script>
 (function globalRTL() {
-    function applyRTL() {
-        // Target all Streamlit textareas
-        var sel = window.parent.document.querySelectorAll('textarea');
-        sel.forEach(function(ta) {
-            ta.setAttribute('dir', 'rtl');
-            ta.style.direction      = 'rtl';
-            ta.style.textAlign      = 'right';
-            ta.style.unicodeBidi    = 'plaintext';
-            ta.style.fontFamily     = "'Amiri','Tajawal',Arial,sans-serif";
-            ta.style.fontSize       = '1.05rem';
-            ta.style.lineHeight     = '1.85';
-        });
-    }
-    // Run now and whenever the DOM changes (Streamlit re-renders on interaction)
-    applyRTL();
-    var observer = new MutationObserver(applyRTL);
-    observer.observe(window.parent.document.body, { childList: true, subtree: true });
+  function applyRTL() {
+    var sel = window.parent.document.querySelectorAll('textarea');
+    sel.forEach(function(ta) {
+      ta.setAttribute('dir', 'rtl');
+      ta.style.direction   = 'rtl';
+      ta.style.textAlign   = 'right';
+      ta.style.unicodeBidi = 'plaintext';
+      ta.style.fontFamily  = "'Amiri','Tajawal',Arial,sans-serif";
+      ta.style.fontSize    = '1.05rem';
+      ta.style.lineHeight  = '1.85';
+    });
+  }
+  applyRTL();
+  var observer = new MutationObserver(applyRTL);
+  observer.observe(window.parent.document.body, { childList: true, subtree: true });
 })();
 </script>
 """, height=0)
@@ -1313,36 +1236,36 @@ components.html("""
 # =============================================
 col_left, col_right = st.columns([1, 1], gap="large")
 
-# ── All accepted file types (unified) ──
+# ── Accepted file types ──
 ALL_FILE_TYPES = ["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp",
                   "pdf", "doc", "docx", "txt", "csv"]
 
 with col_left:
     st.markdown('<div class="section-title">🌙 Student Profile</div>', unsafe_allow_html=True)
-
     name = st.text_input("Student Name", placeholder="e.g. Sara Ahmed")
-
     year = st.slider(
         "Years of Learning Arabic",
         min_value=2, max_value=9, value=5,
         help="Drag to select how many years the student has been learning Arabic"
     )
-
     rubric_key, rubric_text = get_rubric_by_year(year)
     if rubric_key:
-        st.markdown(f'<div class="rubric-badge">📊 Rubric applied: <strong>{rubric_key} Years of Study</strong></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="rubric-badge">📊 Rubric applied: <strong>{rubric_key} Years of Study</strong></div>',
+            unsafe_allow_html=True
+        )
     else:
         st.warning("No rubric found for this year range.")
 
     st.divider()
 
+    # ── LO ──
     st.markdown('<div class="section-title">🎯 Learning Objective (LO)</div>', unsafe_allow_html=True)
-    lo_text = st.text_area("Type the LO here", height=100, placeholder="e.g. Student can write a descriptive paragraph about their daily routine using past tense.")
-
+    lo_text = st.text_area("Type the LO here", height=100,
+        placeholder="e.g. Student can write a descriptive paragraph about their daily routine using past tense.")
     lo_img = st.file_uploader(
         "📷 Or upload LO (image / PDF / Word / TXT)",
-        type=ALL_FILE_TYPES,
-        key="lo_img",
+        type=ALL_FILE_TYPES, key="lo_img",
         help="Upload any file containing the Learning Objective"
     )
     if lo_img:
@@ -1358,13 +1281,13 @@ with col_left:
             except Exception as e:
                 st.error(f"❌ Error reading file: {str(e)}")
 
+    # ── SC ──
     st.markdown('<div class="section-title">✅ Success Criteria</div>', unsafe_allow_html=True)
-    sc_text = st.text_area("Type Success Criteria here", height=100, placeholder="e.g. Uses at least 3 connectives, writes 6-8 lines, uses past and present tense.")
-
+    sc_text = st.text_area("Type Success Criteria here", height=100,
+        placeholder="e.g. Uses at least 3 connectives, writes 6-8 lines, uses past and present tense.")
     sc_img = st.file_uploader(
         "📷 Or upload SC (image / PDF / Word / TXT)",
-        type=ALL_FILE_TYPES,
-        key="sc_img",
+        type=ALL_FILE_TYPES, key="sc_img",
         help="Upload any file containing the Success Criteria"
     )
     if sc_img:
@@ -1380,11 +1303,16 @@ with col_left:
             except Exception as e:
                 st.error(f"❌ Error reading file: {str(e)}")
 
-    st.markdown('<div class="section-title">📚 Word Bank <span style="font-size:0.75rem;opacity:0.6;font-weight:400">(Optional)</span></div>', unsafe_allow_html=True)
+    # ── Word Bank ──
+    st.markdown(
+        '<div class="section-title">📚 Word Bank <span style="font-size:0.75rem;opacity:0.6;font-weight:400">(Optional)</span></div>',
+        unsafe_allow_html=True
+    )
     use_word_bank = st.toggle("Enable Word Bank / Vocabulary List", value=False)
     word_bank_text = ""
+
     if use_word_bank:
-        st.caption("💡 AI will check which words the student used and suggest specific unused words as next steps")
+        st.caption("💡 Spelling corrections will be based primarily on word-bank vocabulary. AI will also check which words the student used and suggest specific unused words as next steps.")
         wb_tab1, wb_tab2 = st.tabs(["✏️ Type Words", "📂 Upload Any File"])
 
         with wb_tab1:
@@ -1423,9 +1351,7 @@ with col_left:
 
 with col_right:
     st.markdown('<div class="section-title">✍️ Student Writing</div>', unsafe_allow_html=True)
-
     writing_tab1, writing_tab2 = st.tabs(["⌨️ Type / Paste Text", "📷 Upload Handwritten Photo"])
-
     writing = ""
 
     with writing_tab1:
@@ -1439,7 +1365,7 @@ with col_right:
 
     with writing_tab2:
         st.info("📸 **ENHANCED OCR** — Now reads even poor/messy handwriting!")
-        st.caption("📱 Supports: JPG, PNG, HEIC (iPhone), PDF, Word, WEBP, BMP")
+        st.caption("📱 Supports: JPG, PNG, HEIC (iPhone), PDF, Word, WEBP, BMP, TXT, CSV")
         writing_imgs = st.file_uploader(
             "Upload handwriting photo(s) or document",
             type=ALL_FILE_TYPES,
@@ -1447,12 +1373,12 @@ with col_right:
             accept_multiple_files=True
         )
         if writing_imgs:
-            all_extracted = []
+            img_exts = ["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp"]
             for i, writing_img in enumerate(writing_imgs):
-                # Only show image preview for actual image files
-                img_exts = ["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp"]
                 if any(writing_img.name.lower().endswith(ext) for ext in img_exts):
                     st.image(writing_img, caption=f"📄 Page {i+1}: {writing_img.name}", use_column_width=True)
+
+            all_extracted = []
             with st.spinner(f"🔍 Reading {len(writing_imgs)} file(s) with ENHANCED OCR..."):
                 for i, writing_img in enumerate(writing_imgs):
                     try:
@@ -1464,17 +1390,23 @@ with col_right:
                             st.warning(f"⚠️ Could not extract text from file {i+1}")
                     except Exception as e:
                         st.error(f"❌ Error reading file {i+1}: {str(e)}")
+
             if all_extracted:
                 extracted_writing = "\n".join(all_extracted)
-
                 auto_corrections = []
                 if word_bank_text.strip():
                     auto_corrections = smart_spelling_matcher(extracted_writing, word_bank_text)
 
                 st.markdown("""
-<div style="background:linear-gradient(135deg,rgba(212,175,55,0.25),rgba(212,175,55,0.15));border:2px solid #d4af37;border-radius:16px;padding:18px 22px;margin:12px 0;box-shadow:0 4px 12px rgba(212,175,55,0.2)">
-<div style="font-size:16px;color:#ffd54f;letter-spacing:2px;font-weight:900;margin-bottom:10px">📝 OCR EXTRACTED TEXT — REVIEW CAREFULLY</div>
-<div style="font-size:14px;color:#ffffff;line-height:1.6">⚠️ AI read the handwriting below. Please review and fix any mistakes before assessment.</div>
+<div style="background:linear-gradient(135deg,rgba(212,175,55,0.25),rgba(212,175,55,0.15));
+            border:2px solid #d4af37;border-radius:16px;padding:18px 22px;margin:12px 0;
+            box-shadow:0 4px 12px rgba(212,175,55,0.2)">
+  <div style="font-size:16px;color:#ffd54f;letter-spacing:2px;font-weight:900;margin-bottom:10px">
+    📝 OCR EXTRACTED TEXT — REVIEW CAREFULLY
+  </div>
+  <div style="font-size:14px;color:#ffffff;line-height:1.6">
+    ⚠️ AI read the handwriting below. Please review and fix any mistakes before assessment.
+  </div>
 </div>""", unsafe_allow_html=True)
 
                 if auto_corrections:
@@ -1483,25 +1415,24 @@ with col_right:
                             priority_emoji = "🔴" if corr["priority"] == "high" else "🟡"
                             st.markdown(f"{priority_emoji} `{corr['wrong']}` → `{corr['correct']}`")
 
-                # ── RTL enforcer: inject JS once to set dir=rtl on all textareas ──
+                # RTL enforcer for the textarea
                 components.html("""
 <script>
 (function applyRTL() {
-    function setRTL() {
-        document.querySelectorAll('textarea').forEach(function(ta) {
-            ta.setAttribute('dir', 'rtl');
-            ta.style.direction = 'rtl';
-            ta.style.textAlign = 'right';
-            ta.style.unicodeBidi = 'plaintext';
-            ta.style.fontFamily = "'Amiri','Tajawal',Arial,sans-serif";
-            ta.style.fontSize = '1.05rem';
-            ta.style.lineHeight = '1.9';
-        });
-    }
-    setRTL();
-    // Observe DOM changes so new textareas also get RTL
-    var obs = new MutationObserver(setRTL);
-    obs.observe(document.body, { childList: true, subtree: true });
+  function setRTL() {
+    document.querySelectorAll('textarea').forEach(function(ta) {
+      ta.setAttribute('dir', 'rtl');
+      ta.style.direction   = 'rtl';
+      ta.style.textAlign   = 'right';
+      ta.style.unicodeBidi = 'plaintext';
+      ta.style.fontFamily  = "'Amiri','Tajawal',Arial,sans-serif";
+      ta.style.fontSize    = '1.05rem';
+      ta.style.lineHeight  = '1.9';
+    });
+  }
+  setRTL();
+  var obs = new MutationObserver(setRTL);
+  obs.observe(document.body, { childList: true, subtree: true });
 })();
 </script>
 """, height=0)
@@ -1514,7 +1445,6 @@ with col_right:
                     placeholder="سيظهر النص العربي هنا بعد المعالجة..."
                 )
                 writing = corrected_writing if corrected_writing.strip() else extracted_writing
-
                 if corrected_writing.strip() != extracted_writing.strip():
                     st.success("✅ Using your manually corrected version")
                 elif auto_corrections:
@@ -1525,14 +1455,12 @@ with col_right:
         st.caption(f"Word count: ~{word_count} words")
 
     st.divider()
-
     assess_btn = st.button(
         "🔍 Assess Writing",
         type="primary",
         use_container_width=True,
         disabled=not (name.strip() and writing.strip() and rubric_key)
     )
-
     if not name.strip():
         st.caption("⚠️ Please enter the student's name.")
     if not writing.strip():
@@ -1542,17 +1470,19 @@ with col_right:
 
     if name.strip() and writing.strip() and rubric_key:
         word_count = len(writing.split())
-        wb_count = len([w for w in word_bank_text.split('\n') if w.strip()]) if word_bank_text.strip() else 0
+        wb_count   = len([w for w in word_bank_text.split('\n') if w.strip()]) if word_bank_text.strip() else 0
         st.markdown(f"""
-        <div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.3);border-radius:10px;padding:12px;margin-top:10px;font-size:11px;color:rgba(220,205,185,0.9)">
-            <div style="font-weight:700;color:#d4af37;margin-bottom:6px;font-size:12px">📋 READY TO ASSESS:</div>
-            <div>✓ Student: <strong>{name.strip()}</strong> (Year {year})</div>
-            <div>✓ Writing: <strong>~{word_count} words</strong></div>
-            <div>✓ Rubric: <strong>{rubric_key} years</strong></div>
-            {f'<div>✓ Word Bank: <strong>{wb_count} words</strong></div>' if wb_count > 0 else '<div style="opacity:0.6">○ No word bank</div>'}
-            {f'<div>✓ Success Criteria: <strong>Provided</strong></div>' if sc_text.strip() else '<div style="opacity:0.6">○ No success criteria</div>'}
-        </div>
-        """, unsafe_allow_html=True)
+<div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.3);
+            border-radius:10px;padding:12px;margin-top:10px;
+            font-size:11px;color:rgba(220,205,185,0.9)">
+  <div style="font-weight:700;color:#d4af37;margin-bottom:6px;font-size:12px">📋 READY TO ASSESS:</div>
+  <div>✓ Student: <strong>{name.strip()}</strong> (Year {year})</div>
+  <div>✓ Writing: <strong>~{word_count} words</strong></div>
+  <div>✓ Rubric: <strong>{rubric_key} years</strong></div>
+  {f'<div>✓ Word Bank: <strong>{wb_count} words</strong></div>' if wb_count > 0 else '<div style="opacity:0.6">○ No word bank</div>'}
+  {f'<div>✓ Success Criteria: <strong>Provided</strong></div>' if sc_text.strip() else '<div style="opacity:0.6">○ No success criteria</div>'}
+</div>
+""", unsafe_allow_html=True)
 
 # =============================================
 # ASSESSMENT OUTPUT WITH A5 PRINT REPORT
@@ -1562,13 +1492,10 @@ if assess_btn:
     with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing..."):
         try:
             prompt = build_prompt(
-                name=name.strip(),
-                year=year,
-                lo=lo_text.strip(),
-                sc=sc_text.strip(),
+                name=name.strip(), year=year,
+                lo=lo_text.strip(), sc=sc_text.strip(),
                 writing=writing.strip(),
-                rubric_key=rubric_key,
-                rubric=rubric_text,
+                rubric_key=rubric_key, rubric=rubric_text,
                 word_bank=word_bank_text.strip() if use_word_bank else ""
             )
             result = assess_with_gemini(prompt)
@@ -1576,66 +1503,96 @@ if assess_btn:
             import json, re
             try:
                 clean = re.sub(r"```json|```", "", result).strip()
-                data = json.loads(clean)
+                data  = json.loads(clean)
             except Exception:
                 data = None
 
             if data:
-                www       = data.get("www", [])
-                ebi       = data.get("ebi", [])
-                next_steps= data.get("next_steps", [])
-                sc_check  = data.get("sc_check", [])
-                score     = data.get("score", {})
+                www        = data.get("www", [])
+                ebi        = data.get("ebi", [])
+                next_steps = data.get("next_steps", [])
+                sc_check   = data.get("sc_check", [])
+                score      = data.get("score", {})
 
-                # ── Filter spelling: keep only Arabic→Arabic entries ──
+                # ── Filter spelling: keep only Arabic→Arabic entries ──────
                 raw_spelling = data.get("spelling", [])
+
                 def is_arabic(text: str) -> bool:
-                    """Return True if text contains any Arabic character."""
                     return any('\u0600' <= ch <= '\u06FF' for ch in text)
+
+                def normalize_ar(t: str) -> str:
+                    t = re.sub(r'[أإآٱ]', 'ا', t)
+                    t = re.sub(r'[ةه]$',  'ه', t)
+                    t = re.sub(r'[ىي]$',  'ي', t)
+                    return t
 
                 spelling = []
                 for s in raw_spelling:
-                    w = s.get("wrong", "").strip()
+                    w = s.get("wrong",   "").strip()
                     c = s.get("correct", "").strip()
-                    # Both sides must be Arabic, and they must differ (after ignoring hamza/taa marbuta/alef variants)
                     if not (is_arabic(w) and is_arabic(c)):
                         continue
-                    # Skip if only hamza/alef variants differ: normalize and compare
-                    def normalize_ar(t):
-                        t = re.sub(r'[أإآٱ]', 'ا', t)
-                        t = re.sub(r'[ةه]$', 'ه', t)
-                        t = re.sub(r'[ىي]$', 'ي', t)
-                        return t
                     if normalize_ar(w) == normalize_ar(c):
                         continue
                     spelling.append({"wrong": w, "correct": c})
                     if len(spelling) >= 5:
                         break
 
+                # ── Deduplicate next_steps ────────────────────────────────
+                seen_ns = set()
+                deduped_next_steps = []
+                for ns in next_steps:
+                    ns_key = re.sub(r'\s+', ' ', ns.lower().strip())[:60]
+                    if ns_key not in seen_ns:
+                        seen_ns.add(ns_key)
+                        deduped_next_steps.append(ns)
+                next_steps = deduped_next_steps[:3]
+
+                # ── Deduplicate EBI ───────────────────────────────────────
+                seen_ebi = set()
+                deduped_ebi = []
+                for e in ebi:
+                    e_key = re.sub(r'\s+', ' ', e.lower().strip())[:60]
+                    if e_key not in seen_ebi:
+                        seen_ebi.add(e_key)
+                        deduped_ebi.append(e)
+                ebi = deduped_ebi[:2]
+
                 first_name = name.strip().split()[0] if name.strip() else name
 
-                # ── Word Bank Usage Analysis ──
+                # ── Word Bank Usage Analysis ──────────────────────────────
                 wb_analysis = ""
                 if word_bank_text.strip():
                     wb_words = set()
                     for line in word_bank_text.strip().split('\n'):
                         for word in line.replace(',', ' ').split():
-                            clean = word.strip()
-                            if clean and len(clean) > 1:
-                                wb_words.add(clean)
+                            clean_w = word.strip()
+                            if clean_w and len(clean_w) > 1:
+                                wb_words.add(clean_w)
                     used_words   = [w for w in wb_words if w in writing]
                     unused_words = [w for w in wb_words if w not in writing]
                     if used_words or unused_words:
-                        used_html   = " ".join([f"<span style='background:#c8e6c9;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block;font-family:\"Amiri\",serif;direction:rtl'>{w}</span>" for w in used_words[:10]])
-                        unused_html = " ".join([f"<span style='background:#ffcdd2;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block;font-family:\"Amiri\",serif;direction:rtl'>{w}</span>" for w in unused_words[:10]])
+                        used_html   = " ".join([
+                            f"<span style='background:#c8e6c9;padding:2px 6px;border-radius:4px;"
+                            f"margin:2px;display:inline-block;font-family:\"Amiri\",serif;"
+                            f"direction:rtl'>{w}</span>" for w in used_words[:10]
+                        ])
+                        unused_html = " ".join([
+                            f"<span style='background:#ffcdd2;padding:2px 6px;border-radius:4px;"
+                            f"margin:2px;display:inline-block;font-family:\"Amiri\",serif;"
+                            f"direction:rtl'>{w}</span>" for w in unused_words[:10]
+                        ])
                         wb_analysis = f"""
-                        <div style="margin:16px 0;padding:12px;background:rgba(212,175,55,0.05);border:1px solid rgba(212,175,55,0.2);border-radius:10px">
-                            <div style="font-size:13px;font-weight:700;color:#d4af37;margin-bottom:8px">📚 WORD BANK USAGE ANALYSIS</div>
-                            {f'<div style="margin-bottom:6px"><span style="font-weight:700;color:#2e7d32">✓ Used ({len(used_words)}):</span><div style="margin-top:4px">{used_html}</div></div>' if used_words else ''}
-                            {f'<div><span style="font-weight:700;color:#c62828">○ Not used yet ({len(unused_words)}):</span><div style="margin-top:4px">{unused_html}</div></div>' if unused_words else ''}
-                        </div>"""
+<div style="margin:16px 0;padding:12px;background:rgba(212,175,55,0.05);
+            border:1px solid rgba(212,175,55,0.2);border-radius:10px">
+  <div style="font-size:13px;font-weight:700;color:#d4af37;margin-bottom:8px">
+    📚 WORD BANK USAGE ANALYSIS
+  </div>
+  {f'<div style="margin-bottom:6px"><span style="font-weight:700;color:#2e7d32">✓ Used ({len(used_words)}):</span><div style="margin-top:4px">{used_html}</div></div>' if used_words else ''}
+  {f'<div><span style="font-weight:700;color:#c62828">○ Not used yet ({len(unused_words)}):</span><div style="margin-top:4px">{unused_html}</div></div>' if unused_words else ''}
+</div>"""
 
-                # ── Level colour map ──
+                # ── Level colour map ──────────────────────────────────────
                 level_colors = {
                     "Beginning":   "#8b0000",
                     "Developing":  "#b8600a",
@@ -1646,124 +1603,148 @@ if assess_btn:
                 lvl       = score.get("level", "Developing")
                 lvl_color = level_colors.get(lvl, "#5a4000")
 
-                # ══════════════════════════════════════════
-                # BUILD HTML REPORT  (matches on-screen UI)
-                # Spelling table: mistake on RIGHT (Arabic RTL), correction on LEFT
-                # ══════════════════════════════════════════
+                # ══════════════════════════════════════════════════════════
+                # BUILD HTML REPORT
+                # ══════════════════════════════════════════════════════════
                 www_rows = "".join([f"""
-                <tr>
-                  <td style="padding:6px 10px;font-size:11px;line-height:1.5;border-bottom:1px solid rgba(76,175,80,0.12)">
-                    <span style="color:#2e7d32;font-weight:700;margin-left:4px">★</span> {w}
-                  </td>
-                </tr>""" for w in www])
+  <tr>
+    <td style="padding:6px 10px;font-size:11px;line-height:1.5;
+               border-bottom:1px solid rgba(76,175,80,0.12)">
+      <span style="color:#2e7d32;font-weight:700;margin-left:4px">★</span> {w}
+    </td>
+  </tr>""" for w in www])
 
                 ebi_rows = "".join([f"""
-                <tr>
-                  <td style="padding:6px 10px;font-size:11px;line-height:1.5;border-bottom:1px solid rgba(229,115,115,0.12)">
-                    <span style="color:#c62828;font-weight:700;margin-left:4px">↗</span> {e}
-                  </td>
-                </tr>""" for e in ebi])
+  <tr>
+    <td style="padding:6px 10px;font-size:11px;line-height:1.5;
+               border-bottom:1px solid rgba(229,115,115,0.12)">
+      <span style="color:#c62828;font-weight:700;margin-left:4px">↗</span> {e}
+    </td>
+  </tr>""" for e in ebi])
 
                 next_steps_rows = "".join([f"""
-                <tr>
-                  <td style="padding:6px 10px;font-size:11px;line-height:1.5;border-bottom:1px solid rgba(156,39,176,0.12)">
-                    <span style="color:#6a1b9a;font-weight:700;margin-left:4px">►</span> {ns}
-                  </td>
-                </tr>""" for ns in next_steps])
+  <tr>
+    <td style="padding:6px 10px;font-size:11px;line-height:1.5;
+               border-bottom:1px solid rgba(156,39,176,0.12)">
+      <span style="color:#6a1b9a;font-weight:700;margin-left:4px">►</span> {ns}
+    </td>
+  </tr>""" for ns in next_steps])
 
-                # Spelling section — RTL table: wrong (red, right side) → correct (green, left side)
                 if spelling:
                     spell_rows = "".join([f"""
-                    <tr style="border-bottom:1px solid rgba(139,0,0,0.08)">
-                      <td style="padding:5px 10px;font-size:14px;color:#2e7d32;font-weight:700;font-family:'Amiri',serif;direction:rtl;text-align:right">{s.get('correct','')}</td>
-                      <td style="padding:5px 6px;font-size:12px;color:#888;text-align:center">←</td>
-                      <td style="padding:5px 10px;font-size:14px;color:#c62828;font-family:'Amiri',serif;direction:rtl;text-align:right;text-decoration:line-through">{s.get('wrong','')}</td>
-                    </tr>""" for s in spelling])
+  <tr style="border-bottom:1px solid rgba(139,0,0,0.08)">
+    <td style="padding:5px 10px;font-size:14px;color:#2e7d32;font-weight:700;
+               font-family:'Amiri',serif;direction:rtl;text-align:right">
+      {s.get('correct','')}
+    </td>
+    <td style="padding:5px 6px;font-size:12px;color:#888;text-align:center">←</td>
+    <td style="padding:5px 10px;font-size:14px;color:#c62828;
+               font-family:'Amiri',serif;direction:rtl;text-align:right;text-decoration:line-through">
+      {s.get('wrong','')}
+    </td>
+  </tr>""" for s in spelling])
                     spelling_section = f"""
-                    <div style="margin-top:12px">
-                      <div style="font-size:10px;color:#8b0000;font-weight:700;letter-spacing:1px;margin-bottom:5px;border-bottom:2px solid rgba(139,0,0,0.2);padding-bottom:3px">KEY SPELLING CORRECTIONS</div>
-                      <div style="font-size:9px;color:#888;margin-bottom:4px;text-align:right;direction:rtl">التصحيح ← الخطأ</div>
-                      <table style="width:100%;border-collapse:collapse;direction:rtl">
-                        <tbody>{spell_rows}</tbody>
-                      </table>
-                    </div>"""
+<div style="margin-top:12px">
+  <div style="font-size:10px;color:#8b0000;font-weight:700;letter-spacing:1px;
+              margin-bottom:5px;border-bottom:2px solid rgba(139,0,0,0.2);padding-bottom:3px">
+    KEY SPELLING CORRECTIONS
+  </div>
+  <div style="font-size:9px;color:#888;margin-bottom:4px;text-align:right;direction:rtl">التصحيح ← الخطأ</div>
+  <table style="width:100%;border-collapse:collapse;direction:rtl">
+    <tbody>{spell_rows}</tbody>
+  </table>
+</div>"""
                 else:
                     spelling_section = """
-                    <div style="margin-top:12px;padding:6px 10px;background:#e8f5e9;border-radius:6px;border:1px solid #4caf50;font-size:10px;color:#2e7d32;text-align:center">
-                      🎉 No major spelling errors detected
-                    </div>"""
+<div style="margin-top:12px;padding:6px 10px;background:#e8f5e9;border-radius:6px;
+            border:1px solid #4caf50;font-size:10px;color:#2e7d32;text-align:center">
+  🎉 No major spelling errors detected
+</div>"""
 
-                # ── Full A5 HTML report ──
                 html_report = f"""
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <div class="print-report" style="
-  width:555px;
-  background:#ffffff;
-  border:2px solid #d4af37;
-  border-radius:10px;
-  padding:18px 22px 20px;
-  margin:10px auto;
-  font-family:'Tajawal',sans-serif;
-  font-size:11.5px;
-  color:#2c1810;
-  box-shadow:0 6px 20px rgba(0,0,0,0.18);
-  box-sizing:border-box;
-">
+  width:555px;background:#ffffff;border:2px solid #d4af37;border-radius:10px;
+  padding:18px 22px 20px;margin:10px auto;font-family:'Tajawal',sans-serif;
+  font-size:11.5px;color:#2c1810;
+  box-shadow:0 6px 20px rgba(0,0,0,0.18);box-sizing:border-box;">
 
-  <!-- ── Header ── -->
+  <!-- Header -->
   <div style="text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #d4af37">
-    <div style="font-size:9px;color:#b8941f;letter-spacing:3px;font-weight:700;margin-bottom:3px;text-transform:uppercase">Arabic Writing Assessment</div>
-    <div style="font-family:'Amiri',serif;font-size:26px;color:#2c1810;font-weight:700;margin:2px 0">{first_name}</div>
-    <div style="font-size:9px;color:#5a4000;font-weight:600;letter-spacing:1px">YEAR {year} &nbsp;·&nbsp; {year} YEARS OF STUDY &nbsp;·&nbsp; {datetime.now().strftime('%d %b %Y')}</div>
+    <div style="font-size:9px;color:#b8941f;letter-spacing:3px;font-weight:700;
+                margin-bottom:3px;text-transform:uppercase">Arabic Writing Assessment</div>
+    <div style="font-family:'Amiri',serif;font-size:26px;color:#2c1810;font-weight:700;margin:2px 0">
+      {first_name}
+    </div>
+    <div style="font-size:9px;color:#5a4000;font-weight:600;letter-spacing:1px">
+      YEAR {year} &nbsp;·&nbsp; {year} YEARS OF STUDY &nbsp;·&nbsp; {datetime.now().strftime('%d %b %Y')}
+    </div>
   </div>
 
-  <!-- ── Score Badge ── -->
-  <div style="margin-bottom:14px;padding:10px 14px;background:rgba(212,175,55,0.07);border-radius:8px;border:1px solid rgba(212,175,55,0.35);display:flex;align-items:center;gap:14px">
-    <div style="text-align:center;min-width:64px;border-right:2px solid rgba(212,175,55,0.25);padding-right:14px;flex-shrink:0">
-      <div style="font-size:30px;font-weight:900;color:#b8941f;line-height:1">{score.get('score','?')}<span style="font-size:13px;color:rgba(184,148,31,0.6)">/{score.get('out_of',15)}</span></div>
+  <!-- Score Badge -->
+  <div style="margin-bottom:14px;padding:10px 14px;background:rgba(212,175,55,0.07);
+              border-radius:8px;border:1px solid rgba(212,175,55,0.35);
+              display:flex;align-items:center;gap:14px">
+    <div style="text-align:center;min-width:64px;border-right:2px solid rgba(212,175,55,0.25);
+                padding-right:14px;flex-shrink:0">
+      <div style="font-size:30px;font-weight:900;color:#b8941f;line-height:1">
+        {score.get('score','?')}<span style="font-size:13px;color:rgba(184,148,31,0.6)">/{score.get('out_of',15)}</span>
+      </div>
       <div style="font-size:8px;color:#b8941f;font-weight:700;letter-spacing:1px;margin-top:2px">SCORE</div>
     </div>
     <div style="flex:1">
-      <div style="display:inline-block;background:{lvl_color};color:white;font-size:8px;font-weight:700;letter-spacing:1px;padding:3px 12px;border-radius:12px;margin-bottom:5px;text-transform:uppercase">{lvl}</div>
+      <div style="display:inline-block;background:{lvl_color};color:white;font-size:8px;
+                  font-weight:700;letter-spacing:1px;padding:3px 12px;border-radius:12px;
+                  margin-bottom:5px;text-transform:uppercase">{lvl}</div>
       <div style="font-size:10px;color:#3a2010;line-height:1.4">{score.get('reason','')}</div>
     </div>
   </div>
 
-  <!-- ── WWW ── -->
+  <!-- WWW -->
   <div style="margin-bottom:11px">
-    <div style="font-size:10px;color:#2e7d32;letter-spacing:1px;font-weight:700;margin-bottom:5px;border-bottom:2px solid rgba(76,175,80,0.3);padding-bottom:3px">★ WHAT WENT WELL</div>
+    <div style="font-size:10px;color:#2e7d32;letter-spacing:1px;font-weight:700;
+                margin-bottom:5px;border-bottom:2px solid rgba(76,175,80,0.3);padding-bottom:3px">
+      ★ WHAT WENT WELL
+    </div>
     <table style="width:100%;border-collapse:collapse;background:#f1f8e9;border-radius:6px;overflow:hidden">
       <tbody>{www_rows}</tbody>
     </table>
   </div>
 
-  <!-- ── EBI ── -->
+  <!-- EBI -->
   <div style="margin-bottom:11px">
-    <div style="font-size:10px;color:#c62828;letter-spacing:1px;font-weight:700;margin-bottom:5px;border-bottom:2px solid rgba(229,115,115,0.3);padding-bottom:3px">↗ EVEN BETTER IF YOU...</div>
+    <div style="font-size:10px;color:#c62828;letter-spacing:1px;font-weight:700;
+                margin-bottom:5px;border-bottom:2px solid rgba(229,115,115,0.3);padding-bottom:3px">
+      ↗ EVEN BETTER IF YOU...
+    </div>
     <table style="width:100%;border-collapse:collapse;background:#ffebee;border-radius:6px;overflow:hidden">
       <tbody>{ebi_rows}</tbody>
     </table>
   </div>
 
-  <!-- ── NEXT STEPS ── -->
+  <!-- NEXT STEPS -->
   <div style="margin-bottom:11px">
-    <div style="font-size:10px;color:#6a1b9a;letter-spacing:1px;font-weight:700;margin-bottom:5px;border-bottom:2px solid rgba(156,39,176,0.3);padding-bottom:3px">► SPECIFIC TARGETS FOR NEXT TIME</div>
+    <div style="font-size:10px;color:#6a1b9a;letter-spacing:1px;font-weight:700;
+                margin-bottom:5px;border-bottom:2px solid rgba(156,39,176,0.3);padding-bottom:3px">
+      ► SPECIFIC TARGETS FOR NEXT TIME
+    </div>
     <table style="width:100%;border-collapse:collapse;background:#f3e5f5;border-radius:6px;overflow:hidden">
       <tbody>{next_steps_rows}</tbody>
     </table>
   </div>
 
-  <!-- ── SPELLING ── -->
+  <!-- SPELLING -->
   {spelling_section}
 
-  <!-- ── Footer ── -->
-  <div style="margin-top:14px;padding:8px 12px;background:rgba(212,175,55,0.05);border-radius:6px;border:1px solid rgba(212,175,55,0.2);text-align:center">
-    <div style="font-size:9px;color:#5a4000;line-height:1.5">Keep up the great work! Focus on the targets above for your next writing task. 💫</div>
+  <!-- Footer -->
+  <div style="margin-top:14px;padding:8px 12px;background:rgba(212,175,55,0.05);
+              border-radius:6px;border:1px solid rgba(212,175,55,0.2);text-align:center">
+    <div style="font-size:9px;color:#5a4000;line-height:1.5">
+      Keep up the great work! Focus on the targets above for your next writing task. 💫
+    </div>
   </div>
-
 </div>"""
 
-                # Print button HTML (lives outside .print-report so it is hidden on print)
                 print_button_html = """
 <div style="text-align:center;margin:16px 0">
   <button onclick="window.print()" style="
@@ -1778,13 +1759,11 @@ if assess_btn:
   </div>
 </div>"""
 
-                # Display word bank analysis
                 if wb_analysis:
                     st.markdown(wb_analysis, unsafe_allow_html=True)
-
                 components.html(html_report + print_button_html, height=1020, scrolling=True)
 
-                # ── TXT download ──
+                # ── TXT download ──────────────────────────────────────────
                 txt_lines = [
                     "ARABIC WRITING ASSESSMENT REPORT",
                     "=" * 60,
