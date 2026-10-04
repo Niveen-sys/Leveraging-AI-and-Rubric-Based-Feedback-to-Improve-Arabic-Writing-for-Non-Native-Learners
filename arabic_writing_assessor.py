@@ -34,6 +34,19 @@ except ImportError:
     DOCX_SUPPORTED = False
 
 # =============================================
+# GROQ MODEL CONFIG  (update here when Groq deprecates models)
+# Checked against https://console.groq.com/docs/deprecations
+# =============================================
+GROQ_ASSESSMENT_MODELS = [
+    "openai/gpt-oss-120b",   # primary
+    "qwen/qwen3.8-27b",      # fallback
+    "openai/gpt-oss-20b",    # light/fast fallback
+]
+GROQ_VISION_MODELS = [
+    "qwen/qwen3.8-27b",      # multimodal (gpt-oss models are text-only)
+]
+
+# =============================================
 # RUBRICS — Pre-loaded from PPTX
 # =============================================
 RUBRICS = {
@@ -1033,19 +1046,12 @@ def smart_spelling_matcher(writing: str, word_bank: str) -> list:
 
 def _groq_ocr_fallback(img_b64: str) -> str:
     """
-    Fallback OCR using Groq's vision models (llama-4 / llama-3.2 vision).
+    Fallback OCR using Groq's vision models.
     Called automatically when all Gemini/Google API keys are quota-exhausted.
+    Model list lives in GROQ_VISION_MODELS at the top of the file.
     """
     api_key = get_groq_api_key()
     client = Groq(api_key=api_key)
-
-    # Groq vision-capable models in preference order
-    vision_models = [
-        "meta-llama/llama-4-scout-17b-16e-instruct",
-        "meta-llama/llama-4-maverick-17b-128e-instruct",
-        "llama-3.2-90b-vision-preview",
-        "llama-3.2-11b-vision-preview",
-    ]
 
     prompt_text = (
         "You are an expert Arabic handwriting recognition system. "
@@ -1056,7 +1062,7 @@ def _groq_ocr_fallback(img_b64: str) -> str:
     )
 
     last_error = None
-    for model_name in vision_models:
+    for model_name in GROQ_VISION_MODELS:
         try:
             response = client.chat.completions.create(
                 model=model_name,
@@ -1070,7 +1076,7 @@ def _groq_ocr_fallback(img_b64: str) -> str:
                         {"type": "text", "text": prompt_text}
                     ]
                 }],
-                max_tokens=1500,
+                max_tokens=3000,
                 temperature=0.1,
             )
             result = response.choices[0].message.content.strip()
@@ -1084,6 +1090,7 @@ def _groq_ocr_fallback(img_b64: str) -> str:
 
 
 def assess_with_gemini(prompt: str) -> str:
+    """Runs the assessment on Groq (name kept for compatibility with the rest of the app)."""
     prompt_hash = hashlib.md5(prompt.encode()).hexdigest()
     cache = _get_assess_cache()
     if prompt_hash in cache:
@@ -1094,16 +1101,18 @@ def assess_with_gemini(prompt: str) -> str:
 
     api_key = get_groq_api_key()
     client = Groq(api_key=api_key)
-    models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "mixtral-8x7b-32768"]
     last_error = None
-    for model_name in models_to_try:
+    for model_name in GROQ_ASSESSMENT_MODELS:
         try:
-            response = client.chat.completions.create(
+            kwargs = dict(
                 model=model_name,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=2500,
-                temperature=0.7,
+                max_tokens=6000,   # reasoning models spend part of this on thinking
+                temperature=0.4,
             )
+            if model_name.startswith("openai/gpt-oss"):
+                kwargs["reasoning_effort"] = "low"
+            response = client.chat.completions.create(**kwargs)
             result = response.choices[0].message.content
             cache[prompt_hash] = result
             _increment_usage("assess")
