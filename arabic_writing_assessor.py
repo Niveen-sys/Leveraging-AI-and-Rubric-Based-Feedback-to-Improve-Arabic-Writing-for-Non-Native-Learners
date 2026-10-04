@@ -4,6 +4,7 @@ import requests as _requests
 from groq import Groq
 import os
 import io
+import re
 import base64
 import hashlib
 import time
@@ -427,12 +428,14 @@ def analyze_writing(writing: str) -> str:
     joined = " " + " ".join(tokens) + " "
 
     lines = [l for l in text.split('\n') if l.strip()]
-    sentences = [s for s in re.split(r'[.!?؟\n]+', text) if len(s.split()) >= 2]
+    has_punct = bool(re.search(r'[.!?؟]', text))
+    sentences = [x for x in re.split(r'[.!?؟]+', text.replace('\n', ' ')) if len(x.split()) >= 2]
 
     def find_words(vocab):
         seen = []
         for raw, tok in zip(raw_tokens, tokens):
-            if tok in vocab and raw not in seen:
+            # also match words with the attached conjunction و (e.g. وأمس)
+            if (tok in vocab or (tok.startswith("و") and tok[1:] in vocab)) and raw not in seen:
                 seen.append(raw)
         return seen
 
@@ -477,7 +480,8 @@ def analyze_writing(writing: str) -> str:
         questions = ["؟"]
 
     out = [
-        f"- Words: {len(tokens)} | Lines: {len(lines)} | Sentences: {len(sentences)}",
+        f"- Words: {len(tokens)} | Handwritten lines: {len(lines)} (a line break is NOT a sentence end — sentences often continue on the next line)"
+        + (f" | Sentences by punctuation: {len(sentences)}" if has_punct else " | Sentence count not reliable (little or no punctuation — judge sentences by meaning)"),
         fmt("Past tense verbs (possible)", past),
         fmt("Past-time words", past_time),
         fmt("Future tense (سوف / سأ...)", future),
@@ -539,6 +543,9 @@ HOW TO USE THE AUTO-ANALYSIS:
   • "FOUND" = the student already did it. NEVER ask for it in EBI or next steps — praise it in WWW instead.
   • Detection is imperfect (OCR, handwriting, diacritics). If the text clearly shows the feature, trust the text over the analysis.
   • Do NOT judge by word count alone. Judge by what the student achieved.
+  • LINE BREAKS: in Arabic handwriting a sentence often continues on the next line. Read the text as CONTINUOUS writing.
+    A line break is NOT a sentence end, NOT a new paragraph, and must NOT be penalised or counted as a separate sentence.
+    Never use the number of lines as evidence of length or quality; judge sentences by meaning and connectives.
 
 ═══════════════════════════════════════════════════
 PART B — GENERATE FEEDBACK
@@ -789,6 +796,11 @@ def convert_to_pil_image(uploaded_file) -> list:
             raise ValueError("DOCX support not available. Please install python-docx.")
     else:
         img = Image.open(uploaded_file)
+        try:
+            from PIL import ImageOps
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
         if img.mode != "RGB":
             img = img.convert("RGB")
         images.append(img)
@@ -812,57 +824,123 @@ def pil_image_to_base64(img) -> str:
 
 
 def _list_gemini_models(api_key: str) -> list:
-    url = f"https://generativelanguage.googleapis.com/v1/models?key={api_key}"
-    try:
-        resp = _requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            models = resp.json().get("models", [])
-            return [
-                m["name"].replace("models/", "")
-                for m in models
-                if "generateContent" in m.get("supportedGenerationMethods", [])
-                and "gemini" in m.get("name", "").lower()
-            ]
-    except Exception:
-        pass
+    """All Gemini models this key can call with generateContent."""
+    for ver in ("v1beta", "v1"):
+        try:
+            resp = _requests.get(
+                f"https://generativelanguage.googleapis.com/{ver}/models",
+                headers={"x-goog-api-key": api_key},
+                params={"pageSize": 200},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                models = resp.json().get("models", [])
+                names = [
+                    m["name"].replace("models/", "")
+                    for m in models
+                    if "generateContent" in m.get("supportedGenerationMethods", [])
+                    and "gemini" in m.get("name", "").lower()
+                ]
+                if names:
+                    return names
+        except Exception:
+            continue
     return []
+
+
+def _rank_gemini_models(names: list) -> list:
+    """
+    Rank Gemini models for reading handwriting, best first.
+    Newest 'flash' > 'pro' > 'lite'. Stable beats preview. Image/TTS/live/embedding models are skipped.
+    This avoids hard-coding model names that Google later shuts down.
+    """
+    skip = ("image", "tts", "live", "audio", "embedding", "robotics", "computer-use",
+            "omni", "native", "imagen", "veo", "lyria", "aqa", "learnlm", "gemma", "thinking")
+    ranked = []
+    for name in names:
+        low = name.lower()
+        if any(k in low for k in skip):
+            continue
+        m = re.match(r"^gemini-(\d+(?:\.\d+)?)-(pro|flash)(.*)$", low)
+        if m:
+            ver, family, rest = float(m.group(1)), m.group(2), m.group(3)
+        else:
+            m2 = re.match(r"^gemini-(pro|flash)(-lite)?-latest$", low)
+            if not m2:
+                continue
+            ver, family, rest = 99.0, m2.group(1), (m2.group(2) or "")
+        if "lite" in rest:
+            tier = 0
+        elif family == "flash":
+            tier = 2
+        else:
+            tier = 1
+        stable = 0 if ("preview" in rest or "exp" in rest) else 1
+        ranked.append((tier, ver, stable, name))
+    ranked.sort(reverse=True)
+    return [r[3] for r in ranked]
+
+
+def _gemini_models_for_ocr(api_key: str) -> list:
+    """Pick up to 4 models: best 2 flash, best pro, best lite (so a quota hit on one still leaves options)."""
+    ranked = _rank_gemini_models(_list_gemini_models(api_key))
+    if not ranked:
+        return ["gemini-flash-latest", "gemini-3.1-flash-lite"]
+    flash = [n for n in ranked if "flash" in n and "lite" not in n]
+    pro = [n for n in ranked if "pro" in n]
+    lite = [n for n in ranked if "lite" in n]
+    picked = flash[:2] + pro[:1] + lite[:1]
+    return picked or ranked[:4]
+
+
+def _limit_size(img: Image.Image, max_side: int = 3000) -> Image.Image:
+    """Downscale very large phone photos (keeps upload fast, no loss of handwriting detail)."""
+    w, h = img.size
+    longest = max(w, h)
+    if longest > max_side:
+        scale = max_side / longest
+        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+    return img
 
 
 def _preprocess_image_for_ocr(img: Image.Image) -> Image.Image:
     """
-    Enhance a PIL image for better Arabic handwriting OCR:
-    - Convert to grayscale then back to RGB
-    - Increase contrast sharply
-    - Sharpen edges
-    - Upscale if too small (keeps fine strokes visible)
-    - Keep as JPEG-compatible RGB for Gemini
+    Gentle clean-up for handwriting photos:
+    - fix phone rotation (EXIF)
+    - upscale small images to ~1800px so thin strokes and dots are visible
+    - remove shadows / uneven lighting (divide by blurred background)
+    - auto-contrast + light unsharp mask
+    NOTE: no harsh edge-enhance filter — it adds noise that looks like extra dots/strokes.
     """
-    from PIL import ImageEnhance, ImageFilter
+    from PIL import ImageOps, ImageEnhance, ImageFilter
 
-    # Upscale small images so letter details are visible
+    img = ImageOps.exif_transpose(img)
     w, h = img.size
-    if max(w, h) < 1200:
-        scale = 1200 / max(w, h)
+    longest = max(w, h)
+    if longest < 1800:
+        scale = 1800 / longest
         img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+    img = _limit_size(img, 3000)
 
-    # Greyscale → back to RGB (strips colour noise, improves contrast detection)
-    grey = img.convert("L")
+    grey = ImageOps.grayscale(img)
 
-    # Strong contrast boost
-    grey = ImageEnhance.Contrast(grey).enhance(2.2)
+    # Remove shadows / uneven lighting
+    try:
+        import numpy as np
+        arr = np.asarray(grey, dtype=np.float32)
+        bg = np.asarray(grey.filter(ImageFilter.GaussianBlur(radius=max(grey.size) / 25)), dtype=np.float32)
+        norm = np.clip(arr / np.maximum(bg, 1.0) * 235.0, 0, 255).astype(np.uint8)
+        grey = Image.fromarray(norm)
+    except Exception:
+        pass
 
-    # Sharpness boost — helps with faint strokes and dots
-    grey = ImageEnhance.Sharpness(grey).enhance(3.0)
-
-    # Edge-enhance filter to make letter strokes crisper
-    grey = grey.filter(ImageFilter.EDGE_ENHANCE_MORE)
-
-    # Back to RGB for Gemini
+    grey = ImageOps.autocontrast(grey, cutoff=1)
+    grey = ImageEnhance.Contrast(grey).enhance(1.3)
+    grey = grey.filter(ImageFilter.UnsharpMask(radius=2, percent=120, threshold=3))
     return grey.convert("RGB")
 
 
 def _gemini_ocr_rest(img_b64: str, api_key: str, model: str, prompt: str) -> str:
-    url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={api_key}"
     payload = {
         "contents": [{
             "parts": [
@@ -871,17 +949,30 @@ def _gemini_ocr_rest(img_b64: str, api_key: str, model: str, prompt: str) -> str
             ]
         }],
         "generationConfig": {
-            "temperature": 0.1,   # Lower = more deterministic / faithful transcription
-            "topP": 0.95,
-            "topK": 40,
-            "maxOutputTokens": 2048
+            "temperature": 0.0,      # faithful transcription, no creativity
+            "topP": 0.9,
+            "maxOutputTokens": 8192  # thinking models spend part of this on reasoning
         }
     }
-    resp = _requests.post(url, json=payload, timeout=45)
-    if resp.status_code != 200:
-        raise RuntimeError(f"{resp.status_code} {resp.text[:200]}")
-    data = resp.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+    last = None
+    for ver in ("v1beta", "v1"):
+        url = f"https://generativelanguage.googleapis.com/{ver}/models/{model}:generateContent"
+        resp = _requests.post(url, json=payload, headers=headers, timeout=90)
+        if resp.status_code == 404:      # model not on this API version — try the other one
+            last = f"404 {resp.text[:150]}"
+            continue
+        if resp.status_code != 200:
+            raise RuntimeError(f"{resp.status_code} {resp.text[:200]}")
+        data = resp.json()
+        try:
+            parts = data["candidates"][0]["content"]["parts"]
+        except (KeyError, IndexError):
+            reason = (data.get("candidates") or [{}])[0].get("finishReason", "unknown")
+            raise RuntimeError(f"Empty response from {model} (finishReason={reason})")
+        text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+        return text.strip()
+    raise RuntimeError(last or f"{model} not available")
 
 
 # ── OCR prompt — multi-pass strategy ─────────────────────────────────────────
@@ -1001,8 +1092,70 @@ NOW TRANSCRIBE THE HANDWRITING:
 """
 
 
-def extract_arabic_from_image_gemini(uploaded_file) -> str:
-    """ENHANCED OCR for Arabic handwriting — accepts all file types."""
+_OCR_EXTRA_RULES = """
+══════════════════════════════════════════════════════
+LINE BREAKS — IMPORTANT
+══════════════════════════════════════════════════════
+In Arabic school writing a sentence very often continues on the next line.
+• Transcribe EACH physical line of handwriting on its OWN line, in order, top to bottom.
+• Do NOT merge lines. Do NOT add full stops, commas or any punctuation the student did not write.
+• The end of a line does NOT mean the end of a sentence.
+• Read every line right-to-left, exactly as the student wrote it.
+• If a word is truly unreadable write [؟] — never invent a word.
+"""
+
+
+def _ocr_context_block(context: str) -> str:
+    if not context or not context.strip():
+        return ""
+    return (
+        "\n══════════════════════════════════════════════════════\n"
+        "TASK CONTEXT — use ONLY to help recognise ambiguous words.\n"
+        "NEVER write a word from this list unless it is really written in the image:\n"
+        + context.strip()[:1500] + "\n"
+    )
+
+
+def _build_ocr_prompt(context: str = "") -> str:
+    head, _sep, _tail = _OCR_PROMPT.rpartition("NOW TRANSCRIBE THE HANDWRITING:")
+    return head + _OCR_EXTRA_RULES + _ocr_context_block(context) + "\nNOW TRANSCRIBE THE HANDWRITING:\n"
+
+
+def _build_refine_prompt(draft: str, context: str = "") -> str:
+    return f"""You are proofreading a transcription of a NON-NATIVE student's Arabic handwriting.
+Below is a DRAFT transcription of the attached image. Compare it with the handwriting LINE BY LINE (right to left).
+
+Fix ONLY real reading mistakes:
+  • wrong letters or wrong dots
+  • words wrongly merged or split
+  • missing or duplicated words or lines
+KEEP the student's own spelling and grammar mistakes — do NOT correct them.
+Do NOT add punctuation. Keep each physical line on its own line.
+Output ONLY the final Arabic transcription — no comments, no English.
+{_ocr_context_block(context)}
+DRAFT:
+{draft}
+"""
+
+
+def _clean_ocr_output(text: str) -> str:
+    """Remove code fences and stray English commentary lines from the model output."""
+    text = re.sub(r"```[a-zA-Z]*", "", text or "").replace("```", "")
+    lines = []
+    for line in text.splitlines():
+        t = line.rstrip()
+        if re.search(r"[A-Za-z]", t) and not re.search(r"[\u0600-\u06FF]", t):
+            continue
+        lines.append(t)
+    return "\n".join(lines).strip()
+
+
+def extract_arabic_from_image_gemini(uploaded_file, context: str = "") -> str:
+    """
+    ENHANCED OCR for Arabic handwriting — accepts all file types.
+    Two passes: (1) transcribe, (2) proofread the draft against the image.
+    `context` (LO / success criteria / word bank) only helps recognise ambiguous words.
+    """
     filename = uploaded_file.name.lower()
 
     # ── Plain-text formats: no OCR needed ────────────────────────────────────
@@ -1029,7 +1182,7 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
             pass
 
     # ── Image / PDF path ─────────────────────────────────────────────────────
-    file_hash = _image_hash(uploaded_file)
+    file_hash = _image_hash(uploaded_file) + "-" + hashlib.md5((context or "").encode("utf-8")).hexdigest()[:8]
     cache = _get_ocr_cache()
     if file_hash in cache:
         return cache[file_hash]
@@ -1038,15 +1191,7 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
     _rate_limit()
 
     api_keys = get_google_api_keys()
-
-    # Preferred model order — best Arabic handwriting quality first
-    preferred = [
-        "gemini-2.0-flash-exp",
-        "gemini-2.0-flash",
-        "gemini-2.5-flash-preview-04-17",
-        "gemini-1.5-flash-002",
-        "gemini-1.5-flash",
-    ]
+    prompt = _build_ocr_prompt(context)
 
     raw_images = convert_to_pil_image(uploaded_file)
     last_error = None
@@ -1054,29 +1199,26 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
     all_text = []
 
     for img in raw_images:
-        enhanced_img = _preprocess_image_for_ocr(img)
-        img_b64 = pil_image_to_base64(enhanced_img)
-        orig_b64 = pil_image_to_base64(img)
+        enhanced_b64 = pil_image_to_base64(_preprocess_image_for_ocr(img))
+        orig_b64 = pil_image_to_base64(_limit_size(img, 3000))
 
         page_text = None
+        used = None   # (api_key, model, image_b64) that worked — reused for the proofreading pass
 
-        # Try every key × every model combination (enhanced, then original)
+        # Try every key × best-available models (cleaned image first, then original)
         for api_key in api_keys:
             if page_text:
                 break
-            discovered = _list_gemini_models(api_key)
-            ordered = [m for m in preferred if m in discovered] + \
-                      [m for m in discovered if m not in preferred] + \
-                      [m for m in preferred if m not in discovered]
-            models_to_try = ordered[:6]
-
-            for b64 in [img_b64, orig_b64]:
+            models_to_try = _gemini_models_for_ocr(api_key)
+            for b64 in [enhanced_b64, orig_b64]:
                 if page_text:
                     break
                 for model_name in models_to_try:
                     try:
-                        page_text = _gemini_ocr_rest(b64, api_key, model_name, _OCR_PROMPT)
-                        if page_text:
+                        text = _clean_ocr_output(_gemini_ocr_rest(b64, api_key, model_name, prompt))
+                        if text:
+                            page_text = text
+                            used = (api_key, model_name, b64)
                             break
                     except Exception as e:
                         err_str = str(e).lower()
@@ -1085,18 +1227,26 @@ def extract_arabic_from_image_gemini(uploaded_file) -> str:
                         last_error = e
                         continue
 
-        if page_text:
+        if page_text and used:
+            # ── Pass 2: proofread the draft against the image ──
+            try:
+                refined = _clean_ocr_output(
+                    _gemini_ocr_rest(used[2], used[0], used[1], _build_refine_prompt(page_text, context))
+                )
+                if refined and len(refined) >= 0.6 * len(page_text):
+                    page_text = refined
+            except Exception:
+                pass   # keep the first-pass draft
             all_text.append(page_text)
         else:
             # ── Gemini exhausted → try Groq vision as last resort ──
-            if quota_errors > 0:
-                try:
-                    groq_text = _groq_ocr_fallback(orig_b64)
-                    if groq_text:
-                        all_text.append(groq_text)
-                        continue  # success — move to next page
-                except Exception as groq_err:
-                    last_error = groq_err
+            try:
+                groq_text = _clean_ocr_output(_groq_ocr_fallback(orig_b64, prompt))
+                if groq_text:
+                    all_text.append(groq_text)
+                    continue  # success — move to next page
+            except Exception as groq_err:
+                last_error = groq_err
 
             # All methods failed — give clear guidance
             if quota_errors > 0:
@@ -1163,22 +1313,23 @@ def smart_spelling_matcher(writing: str, word_bank: str) -> list:
     return corrections[:7]
 
 
-def _groq_ocr_fallback(img_b64: str) -> str:
+def _groq_ocr_fallback(img_b64: str, prompt_text: str = "") -> str:
     """
     Fallback OCR using Groq's vision models.
-    Called automatically when all Gemini/Google API keys are quota-exhausted.
+    Called automatically when Gemini fails or is quota-exhausted.
     Model list lives in GROQ_VISION_MODELS at the top of the file.
     """
     api_key = get_groq_api_key()
     client = Groq(api_key=api_key)
 
-    prompt_text = (
-        "You are an expert Arabic handwriting recognition system. "
-        "Read the handwritten Arabic text in this image EXACTLY as written by the student — "
-        "do NOT correct spelling mistakes, do NOT add tashkeel unless clearly visible. "
-        "Output ONLY the Arabic text, one line per written line. "
-        "No English, no explanations, no comments."
-    )
+    if not prompt_text:
+        prompt_text = (
+            "You are an expert Arabic handwriting recognition system. "
+            "Read the handwritten Arabic text in this image EXACTLY as written by the student — "
+            "do NOT correct spelling mistakes, do NOT add tashkeel unless clearly visible. "
+            "Keep each written line on its own line; do not add punctuation. "
+            "Output ONLY the Arabic text. No English, no explanations, no comments."
+        )
 
     last_error = None
     for model_name in GROQ_VISION_MODELS:
@@ -1196,7 +1347,7 @@ def _groq_ocr_fallback(img_b64: str) -> str:
                     ]
                 }],
                 max_tokens=3000,
-                temperature=0.1,
+                temperature=0.0,
             )
             result = response.choices[0].message.content.strip()
             if result:
@@ -1560,12 +1711,21 @@ st.markdown("""
     textarea {
         direction: rtl !important;
         text-align: right !important;
-        unicode-bidi: plaintext !important;
+        unicode-bidi: embed !important;
         font-family: 'Amiri', 'Tajawal', 'Arial Unicode MS', Arial, sans-serif !important;
         font-size: 1.05rem !important;
         line-height: 1.9 !important;
         letter-spacing: 0.5px !important;
     }
+
+    [data-testid="stTextArea"] textarea,
+    [data-baseweb="textarea"] textarea,
+    [data-baseweb="base-input"] textarea {
+        direction: rtl !important;
+        text-align: right !important;
+        unicode-bidi: embed !important;
+    }
+    textarea::placeholder { text-align: right !important; direction: rtl !important; }
 
     /* Keep LTR for the student-name input (Latin text) */
     input[type="text"] {
@@ -1640,7 +1800,7 @@ components.html("""
             ta.setAttribute('dir', 'rtl');
             ta.style.direction      = 'rtl';
             ta.style.textAlign      = 'right';
-            ta.style.unicodeBidi    = 'plaintext';
+            ta.style.unicodeBidi    = 'embed';
             ta.style.fontFamily     = "'Amiri','Tajawal',Arial,sans-serif";
             ta.style.fontSize       = '1.05rem';
             ta.style.lineHeight     = '1.85';
@@ -1809,10 +1969,11 @@ with col_right:
                 img_exts = ["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp"]
                 if any(writing_img.name.lower().endswith(ext) for ext in img_exts):
                     st.image(writing_img, caption=f"📄 Page {i+1}: {writing_img.name}", use_column_width=True)
+            ocr_context = "\n".join(x.strip() for x in [lo_text, sc_text, word_bank_text] if x and x.strip())
             with st.spinner(f"🔍 Reading {len(writing_imgs)} file(s) with ENHANCED OCR..."):
                 for i, writing_img in enumerate(writing_imgs):
                     try:
-                        extracted = extract_arabic_from_image_gemini(writing_img)
+                        extracted = extract_arabic_from_image_gemini(writing_img, context=ocr_context)
                         if extracted:
                             all_extracted.append(extracted)
                             st.success(f"✅ File {i+1} extracted!")
@@ -1848,7 +2009,7 @@ with col_right:
             ta.setAttribute('dir', 'rtl');
             ta.style.direction = 'rtl';
             ta.style.textAlign = 'right';
-            ta.style.unicodeBidi = 'plaintext';
+            ta.style.unicodeBidi = 'embed';
             ta.style.fontFamily = "'Amiri','Tajawal',Arial,sans-serif";
             ta.style.fontSize = '1.05rem';
             ta.style.lineHeight = '1.9';
