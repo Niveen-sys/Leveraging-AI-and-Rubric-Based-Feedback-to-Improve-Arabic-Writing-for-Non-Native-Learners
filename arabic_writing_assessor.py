@@ -607,6 +607,8 @@ ACCURACY RULE FOR NEXT STEPS:
   • Each next step = ONE small, doable task, e.g. "Add at least one sentence in the past tense,
     e.g. ذهبتُ إلى...".
   • Never ask for something the student already did.
+  • When a next step is about a DIFFERENT SUBJECT, give concrete choices that fit the topic, e.g. أمي / جدتي / أختي with a
+    feminine verb (أمي تتبرع بالمال) or أبي / أخي with a masculine verb (أخي يتبرع بالمال) — not just "use another subject".
 
 NEXT STEP SOURCES — use in this priority order:
   1. UNMET SUCCESS CRITERIA → turn each unmet SC into a specific task
@@ -630,8 +632,10 @@ LIST 1 — "spelling": the spelling of ONE word (maximum 4)
   • Typical learner slips:
       – extra long-vowel letters (extra madd): هاذا → هذا ، لاكن → لكن ، ذالك → ذلك ، كذالك → كذلك ، أولائك → أولئك
       – a missing or wrong long-vowel letter; a doubled or dropped letter
-      – look-alike / sound-alike letters: ث/س/ت ، ذ/ز/د ، ض/ظ/د ، ص/س ، ط/ت ، ق/ك ، ح/ه/خ ، ع/ء
-      – ة / ه / ت at the end of a word; ى / ي; hamza (أ / إ / ا) — only when it is clearly wrong for a real word
+      – sound-alike letters with DIFFERENT shapes: ث↔س ، ذ↔ز ، ض↔د ، ص↔س ، ط↔ت ، ق↔ك ، ح↔ه
+      – ة / ه / ت at the end of a word
+  • IGNORE (do NOT report): hamza of any kind (أ إ ا ء ؤ ئ), ى / ي, and letters that differ ONLY by dots
+    (ب ت ث ن ي / ج ح خ / د ذ / ر ز / س ش / ص ض / ط ظ / ع غ / ف ق). They are usually handwriting or OCR noise.
   • NEVER replace a word by a different word with a different meaning.
 
 LIST 2 — "learner_errors": grammar and usage (maximum 4, most important first)
@@ -642,7 +646,9 @@ LIST 2 — "learner_errors": grammar and usage (maximum 4, most important first)
         – verb with a masculine subject: أبي تعمل → أبي يعمل
         – adjective with its noun: بنت جميل → بنت جميلة ، مدرسة كبير → مدرسة كبيرة
         – demonstratives: هذا مدرسة → هذه مدرسة
-   3. DEFINITENESS: ال on both nouns of an idafa (الكتاب الطالب → كتاب الطالب); noun with ال but adjective without (البيت كبير used as a phrase)
+        When a verb does not match its subject, the "suggestion" fixes the VERB and the "hint" also offers the other
+        option: change the subject (e.g. أمي / جدتي / أختي take a feminine verb; أبي / أخي take a masculine verb).
+   3. DEFINITENESS: ال on both nouns of an idafa (الكتاب الطالب → كتاب الطالب)
    4. NUMBER / PLURAL: a non-human plural takes a feminine SINGULAR adjective (كتب جديدة, not كتب جدد); dual and plural agreement
    5. VERB FORM: wrong person ending; past and present mixed in one idea (أنا ذهب)
    6. PREPOSITIONS: missing or wrong (ذهبت المدرسة → ذهبت إلى المدرسة)
@@ -661,6 +667,11 @@ QUALITY RULES (very important)
   • "wrong" and "original" must really appear in the STUDENT WRITING. Never invent text.
   • The student wrote WITHOUT tashkeel: NEVER add diacritics (fatha, damma, kasra, shadda...) anywhere.
   • SKIP romanised text, English words and OCR artifacts.
+  • NEVER change the subject or the meaning (do not turn أبي into أنا, do not rewrite or reword a sentence).
+    A suggestion may only: fix the FORM of the same words (agreement), add or remove a small word such as a
+    preposition, or re-order adjective and noun.
+  • If the sentence is already correct Arabic, report NOTHING — an empty list is the right answer.
+  • If a sentence looks garbled or meaningless, it is probably an OCR misreading: skip it.
   • Do not list the same mistake twice. Either list may be empty if there is nothing real to report.
 
 ═══════════════════════════════════════════════════
@@ -1273,6 +1284,55 @@ def _known_learner_misspellings(writing: str) -> list:
                 found.append({"wrong": tok, "correct": prefix + _LEARNER_MISSPELLINGS[stem]})
                 break
     return found
+
+
+# ── Ignore hamza and dots-only differences (handwriting / OCR noise) ──
+_SKEL_GROUPS = {"ب": "بتثني", "ح": "جحخ", "د": "دذ", "ر": "رز", "س": "سش", "ص": "صض", "ط": "طظ", "ع": "عغ", "ف": "فق"}
+_SKEL = {}
+for _base, _letters in _SKEL_GROUPS.items():
+    for _ch in _letters:
+        _SKEL[_ch] = _base
+
+
+def _skeleton(text: str) -> str:
+    """Letter shapes without dots / hamza: letters that differ only by dots become the same."""
+    t = _norm_ar(text).replace("ؤ", "و").replace("ئ", "ي").replace("ء", "")
+    return "".join(_SKEL.get(ch, ch) for ch in t)
+
+
+_SUBJECT_WORDS = {_skeleton(w) for w in [
+    "أنا", "نحن", "هو", "هي", "هم", "هن", "أنت", "أنتم",
+    "أبي", "أمي", "أخي", "أختي", "جدي", "جدتي", "عمي", "عمتي", "خالي", "خالتي", "والدي", "والدتي",
+    "صديقي", "صديقتي", "عائلتي", "أسرتي", "أصدقائي", "إخوتي"]}
+_FUNCTION_WORDS = {_skeleton(w) for w in ["إلى", "في", "من", "على", "عن", "مع", "لم", "لن", "ما", "لا", "قد", "هو", "هي"]}
+
+
+def _valid_learner_fix(original: str, suggestion: str, etype: str = "") -> bool:
+    """
+    Keep a 'learner mistake' only if the fix is a small FORM change of the same words.
+    Rejected: hamza-only / dots-only fixes, swapping the subject (أبي → أنا), rewriting the sentence.
+    """
+    et = (etype or "").lower()
+    if _norm_ar(original) == _norm_ar(suggestion):
+        return False                                    # hamza / alef / ى-ي only
+    o = [_skeleton(t) for t in original.split()]
+    sg = [_skeleton(t) for t in suggestion.split()]
+    agreement_like = any(k in et for k in ("gender", "agree", "verb", "tense"))
+    if o == sg and not agreement_like:
+        return False                                    # dots-only difference
+    if "order" in et or "adjective" in et:
+        return sorted(o) == sorted(sg) and o != sg      # re-ordering only
+    if (set(o) & _SUBJECT_WORDS) != (set(sg) & _SUBJECT_WORDS):
+        return False                                    # never swap the subject / change the meaning
+    new = [t for t in sg if t not in o]
+    gone = [t for t in o if t not in sg]
+    if len(new) > 2 or len(gone) > 2:
+        return False                                    # a rewrite, not a fix
+    for t in new:
+        if t in _FUNCTION_WORDS or any(levenshtein_distance(t, g) <= 2 for g in gone):
+            continue
+        return False
+    return True
 
 
 def _clean_ocr_output(text: str) -> str:
@@ -2117,7 +2177,17 @@ with col_left:
                 st.error(f"❌ Error reading file: {str(e)}")
 
     st.markdown('<div class="section-title">✅ Success Criteria</div>', unsafe_allow_html=True)
-    sc_text = st.text_area("Type Success Criteria here", height=100, placeholder="e.g. Uses at least 3 connectives, writes 6-8 lines, uses past and present tense.")
+    sc_text = st.text_area(
+        "Type Success Criteria here — معايير النجاح",
+        height=100,
+        placeholder="e.g. Uses at least 3 connectives, uses past and present tense.\nمثال: أستخدم 3 روابط على الأقل، وأكتب جملة بالماضي وجملة بالمضارع.",
+        help=(
+            "Success Criteria = what the student must show in this task. Write them in English or Arabic, one per line. "
+            "The AI checks each one and builds the 'next steps' from the ones that are missing.\n\n"
+            "معايير النجاح = ما المطلوب من الطالبة في هذه المهمة. اكتبيها بالعربية أو الإنجليزية، كل معيار في سطر. "
+            "يفحص الذكاء الاصطناعي كل معيار ويبني الخطوات التالية من المعايير الناقصة."
+        ),
+    )
 
     sc_img = st.file_uploader(
         "📷 Or upload SC (image / PDF / Word / TXT)",
@@ -2402,7 +2472,7 @@ if assess_btn:
                     if _norm_ar(w) not in _writing_norm:
                         continue
                     # ignore hamza / alef / taa-marbuta variants (not flagged)
-                    if _norm_ar(w) == _norm_ar(c):
+                    if _skeleton(w) == _skeleton(c):      # hamza / dots-only differences are ignored
                         continue
                     # a real spelling slip = small difference; big differences are usually OCR/AI rewrites
                     if not _plausible_learner_edit(_norm_ar(w), _norm_ar(c)):
@@ -2509,6 +2579,8 @@ if assess_btn:
                     if " ".join(_norm_ar(o).split()) not in _writing_ws:      # must be in the student's text
                         continue
                     if any(x["original"] == o for x in learner_errors):
+                        continue
+                    if not _valid_learner_fix(o, sg, str(e.get("type", ""))):
                         continue
                     learner_errors.append({
                         "original": o,
