@@ -492,8 +492,8 @@ def analyze_writing(writing: str) -> str:
         questions = ["؟"]
 
     out = [
-        f"- Words: {len(tokens)} | Handwritten lines: {len(lines)} (a line break is NOT a sentence end — sentences often continue on the next line)"
-        + (f" | Sentences by punctuation: {len(sentences)}" if has_punct else " | Sentence count not reliable (little or no punctuation — judge sentences by meaning)"),
+        f"- Words: {len(tokens)} (the text is continuous writing — judge sentences by meaning and connectives, never by line breaks)"
+        + (f" | Sentences by punctuation: {len(sentences)}" if has_punct else " | Sentence count not reliable (little or no punctuation)"),
         fmt("Past tense verbs (possible)", past),
         fmt("Past-time words", past_time),
         fmt("Future tense (سوف / سأ...)", future),
@@ -511,10 +511,26 @@ def analyze_writing(writing: str) -> str:
 def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_key: str, rubric: str, word_bank: str = '') -> str:
     first_name = name.strip().split()[0] if name.strip() else name
     level_note = get_level_note(year)
-    word_bank_section = f"""Word Bank provided by teacher: {word_bank}
-- CRITICAL: Check which words from the word bank the student DID use — praise them specifically in WWW
-- CRITICAL: Identify 2-3 HIGH-IMPACT words from word bank they DIDN'T use that would strengthen their writing
-- Use these unused words as specific next steps — name the EXACT Arabic word""" if word_bank.strip() else "No word bank provided."
+
+    # Word bank: Arabic only, and never suggest a word when the student already used an equivalent
+    wb = analyze_word_bank(writing, word_bank)
+    if wb["all"]:
+        _all = "، ".join(wb["all"])
+        _used = "، ".join(wb["used"]) or "none"
+        _sug = "، ".join(wb["suggest"]) or "none"
+        _alt = "، ".join(f'{a["word"]} (student used: {a["alt"]})' for a in wb["alt_covered"]) or "none"
+        word_bank_section = f"""Word Bank provided by teacher (Arabic words only): {_all}
+- USED by the student: {_used}
+- NOT USED and WORTH SUGGESTING: {_sug}
+- NOT USED, but the student ALREADY used an equivalent word — DO NOT suggest these: {_alt}
+RULES FOR THE WORD BANK:
+- Praise specific word bank words the student used in WWW.
+- A next step may suggest an unused word ONLY from "WORTH SUGGESTING" — at most 2 words, the ones that best fit the topic. Write the exact Arabic word.
+- Before suggesting any word, re-read the student's text: if the student already did the same job with another word (a synonym, or another connective / adjective / time phrase of the same type — even if it is NOT in the bank), do NOT suggest it.
+- You do NOT have to mention every unused word. If none is really needed, suggest none.
+- Never write English words from the bank; Arabic only."""
+    else:
+        word_bank_section = "No word bank provided."
 
     # Build year-specific next step instruction bank
     next_step_examples = _get_next_step_examples(year)
@@ -613,7 +629,8 @@ ACCURACY RULE FOR NEXT STEPS:
 NEXT STEP SOURCES — use in this priority order:
   1. UNMET SUCCESS CRITERIA → turn each unmet SC into a specific task
      e.g. SC says "use past tense" → "Write one sentence using past tense, e.g. ذهبتُ إلى..."
-  2. UNUSED WORD BANK WORDS → name the exact word and where to use it
+  2. UNUSED WORD BANK WORDS → name the exact word and where to use it — ONLY words from the "WORTH SUGGESTING" list
+     (never a word the student already replaced with an equivalent)
      e.g. "Add the word [Arabic word] to describe [noun from their writing]"
   3. NEXT RUBRIC LEVEL → identify the specific thing needed to reach the next level
      e.g. rubric says next level needs connectives → give exact connective + example
@@ -1144,8 +1161,8 @@ OUTPUT FORMAT — STRICT
 • Output ONLY the Arabic text — one transcribed line per written line.
 • NO English words. NO explanations. NO tashkeel unless clearly visible.
 • NO corrections. NO comments. NO confidence scores. NO [?] unless truly unreadable.
-• Title/heading on its own line first if present.
-• Preserve blank lines.
+• Title/heading on its own line first if present, followed by ONE blank line.
+• Do NOT insert any other blank lines.
 
 NOW TRANSCRIBE THE HANDWRITING:
 """
@@ -1335,6 +1352,153 @@ def _valid_learner_fix(original: str, suggestion: str, etype: str = "") -> bool:
     return True
 
 
+# ══════════════════════════════════════════════════════════════
+# CONTINUOUS TEXT + WORD BANK HELPERS
+# ══════════════════════════════════════════════════════════════
+
+def _join_lines(text: str) -> str:
+    """
+    A line break in Arabic handwriting is NOT the end of a sentence.
+    Join the physical lines into continuous text. Only a BLANK line = new paragraph.
+    (Safe to run more than once.)
+    """
+    if not text:
+        return ""
+    blocks = re.split(r"\n\s*\n", text.replace("\r", ""))
+    out = []
+    for b in blocks:
+        joined = " ".join(l.strip() for l in b.split("\n") if l.strip())
+        joined = re.sub(r"\s{2,}", " ", joined).strip()
+        if joined:
+            out.append(joined)
+    return "\n\n".join(out)
+
+
+def _join_ocr_lines(text: str) -> str:
+    """OCR output → one continuous paragraph. Only a short title (first block, up to 6 words) stays on its own."""
+    if not text:
+        return ""
+    blocks = [b for b in re.split(r"\n\s*\n", text.replace("\r", "")) if b.strip()]
+    if not blocks:
+        return ""
+    title = ""
+    if len(blocks) > 1 and len(blocks[0].split()) <= 6 and "\n" not in blocks[0].strip():
+        title = " ".join(blocks[0].split())
+        blocks = blocks[1:]
+    body = " ".join(l.strip() for b in blocks for l in b.split("\n") if l.strip())
+    body = re.sub(r"\s{2,}", " ", body).strip()
+    return (title + "\n\n" + body) if title else body
+
+
+# ── Word bank: Arabic only, + "alternatives" so we never suggest a word the student already replaced ──
+_WB_KEEP = re.compile(r"[^\u0621-\u063A\u0641-\u064A\u0671\s]")   # keeps Arabic letters only
+
+
+def parse_word_bank(raw: str) -> list:
+    """Arabic words/phrases only (English translations, numbers and symbols removed), no duplicates."""
+    words, seen = [], set()
+    for line in (raw or "").replace("\r", "").split("\n"):
+        parts = re.split(r"[,،;؛|/\t•·=:–—]+|\s-\s|\s{3,}", line)
+        had_sep = len([p for p in parts if p.strip()]) > 1
+        for part in parts:
+            part = _WB_KEEP.sub(" ", _strip_tashkeel(part))
+            part = " ".join(part.split())
+            if len(part) < 2:
+                continue
+            # a separated item stays whole (it may be a phrase); a long unseparated line is split into words
+            pieces = part.split() if (len(part.split()) > 3 and not had_sep) else [part]
+            for p in pieces:
+                key = _norm_ar(p)
+                if len(p) >= 2 and key not in seen:
+                    seen.add(key)
+                    words.append(p)
+    return words
+
+
+# Words/phrases that do the SAME job. If the student used one, the others are NOT suggested.
+_WB_ALT_GROUPS_RAW = [
+    ["لكن", "ولكن", "لكنه", "غير أن", "إلا أن", "بينما", "في المقابل", "على العكس", "من ناحية أخرى", "مع ذلك", "على الرغم من", "رغم", "مع أن"],
+    ["لأن", "بسبب", "نظرا لأن", "نظرا", "حيث إن", "حيث"],
+    ["لذلك", "لهذا", "لهذا السبب", "بالتالي", "نتيجة لذلك", "ومن ثم", "إذن"],
+    ["أيضا", "كذلك", "بالإضافة إلى ذلك", "إضافة إلى ذلك", "علاوة على ذلك", "فضلا عن ذلك", "زيادة على ذلك", "كما أن"],
+    ["ثم", "بعد ذلك", "بعدها"],
+    ["أولا", "في البداية", "بداية"],
+    ["أخيرا", "في النهاية", "في الختام", "ختاما"],
+    ["أعتقد", "أظن", "في رأيي", "برأيي", "من وجهة نظري", "أرى أن", "أرى"],
+    ["إذا", "لو", "في حال"],
+    ["دائما", "غالبا", "عادة", "كل يوم", "يوميا"],
+    ["أحيانا", "في بعض الأحيان"],
+    ["أمس", "الأسبوع الماضي", "العام الماضي", "الشهر الماضي"],
+    ["غدا", "في المستقبل", "بعد غد", "الأسبوع القادم"],
+    ["جميل", "رائع", "ممتاز", "مدهش", "جذاب", "حلو"],
+    ["كبير", "ضخم", "هائل", "واسع"],
+    ["سعيد", "مسرور", "فرحان"],
+    ["جدا", "كثيرا", "للغاية", "بشدة"],
+    ["ممتع", "مسلي", "شيق"],
+    ["مفيد", "نافع"],
+]
+_WB_ALT_GROUPS = [{_norm_ar(x): x for x in g} for g in _WB_ALT_GROUPS_RAW]
+_WB_PREFIXES = ["", "و", "ف", "ب", "ل", "ك", "ال", "وال", "بال", "فال", "كال", "لل", "ولل", "س", "وس"]
+_WB_SUFFIXES = {"", "ه", "ها", "هم", "هن", "ك", "كم", "ي", "نا", "ة", "ات", "ون", "ين", "ان"}
+
+
+def _in_text(phrase_n: str, tokens_n: list, joined_n: str) -> bool:
+    """Is this (normalised) word/phrase used in the writing? Allows prefixes (و، ب، ال...) and endings (ة، ها...)."""
+    if " " in phrase_n:
+        return any(f" {pre}{phrase_n} " in joined_n for pre in ("", "و", "ف"))
+    for t in tokens_n:
+        for pre in _WB_PREFIXES:
+            if pre and len(phrase_n) < 3:
+                continue
+            if not t.startswith(pre):
+                continue
+            rest = t[len(pre):]
+            if rest == phrase_n:
+                return True
+            if len(phrase_n) >= 3 and rest.startswith(phrase_n) and rest[len(phrase_n):] in _WB_SUFFIXES:
+                return True
+    return False
+
+
+def analyze_word_bank(writing: str, word_bank_raw: str) -> dict:
+    """
+    Returns {"all": [...], "used": [...], "suggest": [...], "alt_covered": [{"word":..., "alt":...}]}
+      used        = bank words the student used
+      suggest     = unused words worth suggesting (no equivalent used)
+      alt_covered = unused words, but the student already used an alternative → do NOT suggest
+    """
+    bank = parse_word_bank(word_bank_raw)
+    res = {"all": bank, "used": [], "suggest": [], "alt_covered": []}
+    if not bank:
+        return res
+    punct = " .,،؛:!?؟\"'()[]«»-"
+    tokens_n = [_norm_ar(t.strip(punct)) for t in (writing or "").split()]
+    tokens_n = [t for t in tokens_n if t]
+    joined_n = " " + " ".join(tokens_n) + " "
+    for w in bank:
+        wn = _norm_ar(w)
+        stem = wn[1:] if (wn.startswith("و") and len(wn) >= 4) else ""
+        if _in_text(wn, tokens_n, joined_n) or (stem and _in_text(stem, tokens_n, joined_n)):
+            res["used"].append(w)
+            continue
+        alt = None
+        for g in _WB_ALT_GROUPS:
+            if wn in g or (stem and stem in g):
+                for m, raw_m in g.items():
+                    if m in (wn, stem):
+                        continue
+                    if _in_text(m, tokens_n, joined_n):
+                        alt = raw_m
+                        break
+            if alt:
+                break
+        if alt:
+            res["alt_covered"].append({"word": w, "alt": alt})
+        else:
+            res["suggest"].append(w)
+    return res
+
+
 def _clean_ocr_output(text: str) -> str:
     """Remove code fences and stray English commentary lines from the model output."""
     text = re.sub(r"```[a-zA-Z]*", "", text or "").replace("```", "")
@@ -1420,7 +1584,7 @@ def _longer_enough(new: str, old: str) -> bool:
     return bool(new) and len(new) >= 0.6 * len(old)
 
 
-def extract_arabic_from_image_gemini(uploaded_file, context: str = "") -> str:
+def extract_arabic_from_image_gemini(uploaded_file, context: str = "", join_lines: bool = False) -> str:
     """
     ENHANCED OCR for Arabic handwriting — accepts all file types.
     Engines (chosen in the sidebar):
@@ -1428,6 +1592,8 @@ def extract_arabic_from_image_gemini(uploaded_file, context: str = "") -> str:
       • Claude only: Claude (transcribe + proofread)
       • Cross-check: Gemini AND Claude each read the image, then Claude reconciles the two drafts
     `context` (LO / success criteria / word bank) only helps recognise ambiguous words.
+    `join_lines=True` (used for the student's writing): physical lines are joined into continuous text,
+    because in Arabic a sentence continues on the next line.
     """
     filename = uploaded_file.name.lower()
 
@@ -1436,7 +1602,7 @@ def extract_arabic_from_image_gemini(uploaded_file, context: str = "") -> str:
         try:
             text = extract_text_from_docx(uploaded_file)
             if text.strip():
-                return text
+                return "\n\n".join(text.split("\n")) if join_lines else text
         except Exception:
             pass
 
@@ -1465,7 +1631,7 @@ def extract_arabic_from_image_gemini(uploaded_file, context: str = "") -> str:
                  + hashlib.md5((context or "").encode("utf-8")).hexdigest()[:8])
     cache = _get_ocr_cache()
     if file_hash in cache:
-        return cache[file_hash]
+        return _join_ocr_lines(cache[file_hash]) if join_lines else cache[file_hash]
 
     _check_limit("ocr")
     _rate_limit()
@@ -1561,7 +1727,7 @@ def extract_arabic_from_image_gemini(uploaded_file, context: str = "") -> str:
     result = "\n".join(all_text)
     cache[file_hash] = result
     _increment_usage("ocr")
-    return result
+    return _join_ocr_lines(result) if join_lines else result
 
 
 def smart_spelling_matcher(writing: str, word_bank: str) -> list:
@@ -2248,8 +2414,8 @@ with col_left:
                             st.error(f"❌ Could not read file {i+1}: {str(e)}")
                 if all_wb_words:
                     word_bank_text = "\n".join(all_wb_words)
-                    st.markdown("**📝 Extracted words:**")
-                    st.text_area("Preview:", value=word_bank_text, height=100, disabled=True)
+                    st.markdown("**📝 Extracted words (Arabic only):**")
+                    st.text_area("Preview:", value="، ".join(parse_word_bank(word_bank_text)), height=100, disabled=True)
 
 with col_right:
     st.markdown('<div class="section-title">✍️ Student Writing</div>', unsafe_allow_html=True)
@@ -2283,11 +2449,13 @@ with col_right:
                 img_exts = ["png", "jpg", "jpeg", "heic", "heif", "webp", "bmp"]
                 if any(writing_img.name.lower().endswith(ext) for ext in img_exts):
                     st.image(writing_img, caption=f"📄 Page {i+1}: {writing_img.name}", use_column_width=True)
-            ocr_context = "\n".join(x.strip() for x in [lo_text, sc_text, word_bank_text] if x and x.strip())
+            # Word bank goes to the reader as Arabic words only
+            ocr_context = "\n".join(x.strip() for x in [lo_text, sc_text, "، ".join(parse_word_bank(word_bank_text))] if x and x.strip())
             with st.spinner(f"🔍 Reading {len(writing_imgs)} file(s) with ENHANCED OCR..."):
                 for i, writing_img in enumerate(writing_imgs):
                     try:
-                        extracted = extract_arabic_from_image_gemini(writing_img, context=ocr_context)
+                        # join_lines=True → a line break is not a sentence end, text is joined into continuous writing
+                        extracted = extract_arabic_from_image_gemini(writing_img, context=ocr_context, join_lines=True)
                         if extracted:
                             all_extracted.append(extracted)
                             st.success(f"✅ File {i+1} extracted!")
@@ -2296,11 +2464,11 @@ with col_right:
                     except Exception as e:
                         st.error(f"❌ Error reading file {i+1}: {str(e)}")
             if all_extracted:
-                extracted_writing = "\n".join(all_extracted)
+                extracted_writing = " ".join(all_extracted)
 
                 auto_corrections = []
                 if word_bank_text.strip():
-                    auto_corrections = smart_spelling_matcher(extracted_writing, word_bank_text)
+                    auto_corrections = smart_spelling_matcher(extracted_writing, "\n".join(parse_word_bank(word_bank_text)))
 
                 st.markdown("""
 <div style="background:linear-gradient(135deg,rgba(212,175,55,0.25),rgba(212,175,55,0.15));border:2px solid #d4af37;border-radius:16px;padding:18px 22px;margin:12px 0;box-shadow:0 4px 12px rgba(212,175,55,0.2)">
@@ -2380,7 +2548,7 @@ with col_right:
 
     if name.strip() and writing.strip() and rubric_key:
         word_count = len(writing.split())
-        wb_count = len([w for w in word_bank_text.split('\n') if w.strip()]) if word_bank_text.strip() else 0
+        wb_count = len(parse_word_bank(word_bank_text)) if word_bank_text.strip() else 0
         st.markdown(f"""
         <div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.3);border-radius:10px;padding:12px;margin-top:10px;font-size:11px;color:rgba(220,205,185,0.9)">
             <div style="font-weight:700;color:#d4af37;margin-bottom:6px;font-size:12px">📋 READY TO ASSESS:</div>
@@ -2397,6 +2565,7 @@ with col_right:
 # =============================================
 if assess_btn:
     st.divider()
+    writing = _join_lines(writing)   # line breaks are not sentence ends; only a blank line = new paragraph
     with st.spinner(f"✨ Assessing {name.strip().split()[0]}'s writing..."):
         try:
             prompt = build_prompt(
@@ -2485,26 +2654,29 @@ if assess_btn:
 
                 first_name = name.strip().split()[0] if name.strip() else name
 
-                # ── Word Bank Usage Analysis ──
+                # ── Word Bank Usage Analysis (Arabic only; no suggestion when an alternative was used) ──
                 wb_analysis = ""
-                if word_bank_text.strip():
-                    wb_words = set()
-                    for line in word_bank_text.strip().split('\n'):
-                        for word in line.replace(',', ' ').split():
-                            clean = word.strip()
-                            if clean and len(clean) > 1:
-                                wb_words.add(clean)
-                    used_words   = [w for w in wb_words if w in writing]
-                    unused_words = [w for w in wb_words if w not in writing]
-                    if used_words or unused_words:
-                        used_html   = " ".join([f"<span style='background:#c8e6c9;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block;font-family:{CALIBRI_STACK};direction:rtl'>{w}</span>" for w in used_words[:10]])
-                        unused_html = " ".join([f"<span style='background:#ffcdd2;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block;font-family:{CALIBRI_STACK};direction:rtl'>{w}</span>" for w in unused_words[:10]])
-                        wb_analysis = f"""
-                        <div style="margin:16px 0;padding:12px;background:rgba(212,175,55,0.05);border:1px solid rgba(212,175,55,0.2);border-radius:10px">
-                            <div style="font-size:13px;font-weight:700;color:#d4af37;margin-bottom:8px">📚 WORD BANK USAGE ANALYSIS</div>
-                            {f'<div style="margin-bottom:6px"><span style="font-weight:700;color:#2e7d32">✓ Used ({len(used_words)}):</span><div style="margin-top:4px">{used_html}</div></div>' if used_words else ''}
-                            {f'<div><span style="font-weight:700;color:#c62828">○ Not used yet ({len(unused_words)}):</span><div style="margin-top:4px">{unused_html}</div></div>' if unused_words else ''}
-                        </div>"""
+                wb = analyze_word_bank(writing, word_bank_text) if (use_word_bank and word_bank_text.strip()) else None
+                if wb and wb["all"]:
+                    def _chip(w, bg, tip=""):
+                        return (f"<span title='{tip}' style='background:{bg};padding:2px 8px;border-radius:4px;margin:2px;"
+                                f"display:inline-block;font-family:{CALIBRI_STACK};direction:rtl;color:#222'>{w}</span>")
+                    wb_blocks = []
+                    if wb["used"]:
+                        chips = " ".join(_chip(w, "#c8e6c9") for w in wb["used"])
+                        wb_blocks.append(f"<div style='margin-bottom:8px'><span style='font-weight:700;color:#81c784'>✓ كلمات استخدمتها الطالبة ({len(wb['used'])}):</span><div style='margin-top:4px'>{chips}</div></div>")
+                    if wb["suggest"]:
+                        chips = " ".join(_chip(w, "#ffcdd2") for w in wb["suggest"])
+                        wb_blocks.append(f"<div style='margin-bottom:8px'><span style='font-weight:700;color:#ef9a9a'>○ لم تُستخدم بعد — مقترحة ({len(wb['suggest'])}):</span><div style='margin-top:4px'>{chips}</div></div>")
+                    if wb["alt_covered"]:
+                        chips = " ".join(_chip(a["word"], "#e0e0e0", "استخدمت بديلاً: " + a["alt"]) for a in wb["alt_covered"])
+                        wb_blocks.append(f"<div><span style='font-weight:700;color:#bdbdbd'>≈ لم تُستخدم لكنها استخدمت بديلاً لها — لا تُقترح ({len(wb['alt_covered'])}):</span><div style='margin-top:4px'>{chips}</div></div>")
+                    wb_analysis = (
+                        "<div style='margin:16px 0;padding:12px;direction:rtl;text-align:right;background:rgba(212,175,55,0.05);"
+                        "border:1px solid rgba(212,175,55,0.2);border-radius:10px'>"
+                        "<div style='font-size:13px;font-weight:700;color:#d4af37;margin-bottom:8px'>📚 تحليل بنك الكلمات</div>"
+                        + "".join(wb_blocks) + "</div>"
+                    )
 
                 # ── Level colour map ──
                 level_colors = {
