@@ -43,6 +43,18 @@ GROQ_ASSESSMENT_MODELS = [
     "qwen/qwen3.8-27b",      # fallback
     "openai/gpt-oss-20b",    # light/fast fallback
 ]
+# ── Second handwriting reader: Claude (optional — needs ANTHROPIC_API_KEY in secrets.toml) ──
+CLAUDE_VISION_MODEL = "claude-sonnet-5-5"   # can be overridden with ANTHROPIC_MODEL in secrets.toml
+
+OCR_ENGINES = [
+    "Auto (Gemini → Claude → Groq)",
+    "Claude only",
+    "Best accuracy: Gemini + Claude cross-check",
+]
+
+# ── Report / text font: Calibri (has Arabic glyphs; installed with Microsoft Office on Windows/Mac) ──
+CALIBRI_STACK = "Calibri, Carlito, Segoe UI, Tahoma, Noto Sans Arabic, Arial, sans-serif"  # unquoted on purpose (used inside HTML attributes)
+
 GROQ_VISION_MODELS = [
     "qwen/qwen3.8-27b",      # multimodal (gpt-oss models are text-only)
 ]
@@ -617,6 +629,11 @@ Flag ONLY true spelling mistakes — wrong Arabic letters in Arabic script.
   • ONLY flag: wrong consonant used, missing essential letter, extra letter that changes meaning
   • USE CONTEXT: predict the intended word from word bank, topic, and surrounding text
   • MAXIMUM 5 corrections
+  • ONE WORD per correction — never a phrase or a sentence
+  • The student wrote WITHOUT tashkeel: NEVER add diacritics (fatha/damma/kasra/shadda...) to "wrong" or "correct"
+  • The text was typed from handwriting by OCR. If a word looks like an OCR misreading rather than a real
+    student spelling mistake, do NOT list it
+  • "wrong" must be a word that really appears in the STUDENT WRITING below
 
 ═══════════════════════════════════════════════════
 STUDENT INFO
@@ -694,6 +711,9 @@ def get_google_api_keys() -> list:
     if not keys:
         raise ValueError("❌ GOOGLE_API_KEY not found! Please add it to .streamlit/secrets.toml")
     return keys
+
+def get_anthropic_api_key() -> str:
+    return _secret("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY", "")
 
 def get_groq_api_key() -> str:
     key = _secret("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY", "")
@@ -1138,9 +1158,25 @@ DRAFT:
 """
 
 
+_TASHKEEL_RE = re.compile(r"[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]")
+
+
+def _strip_tashkeel(text: str) -> str:
+    """Remove diacritics (fatha, damma, kasra, shadda, sukun, tanwin...) and tatweel."""
+    return _TASHKEEL_RE.sub("", text or "")
+
+
+def _norm_ar(text: str) -> str:
+    """Loose form for matching: no tashkeel, alef variants unified, ى→ي."""
+    t = _strip_tashkeel(text)
+    t = re.sub(r"[أإآٱ]", "ا", t)
+    return t.replace("ى", "ي")
+
+
 def _clean_ocr_output(text: str) -> str:
     """Remove code fences and stray English commentary lines from the model output."""
     text = re.sub(r"```[a-zA-Z]*", "", text or "").replace("```", "")
+    text = _strip_tashkeel(text)      # the student did not write tashkeel — never add it
     lines = []
     for line in text.splitlines():
         t = line.rstrip()
@@ -1150,10 +1186,85 @@ def _clean_ocr_output(text: str) -> str:
     return "\n".join(lines).strip()
 
 
+def _claude_ocr_rest(img_b64: str, prompt: str) -> str:
+    """Read handwriting with Claude vision (Anthropic API). Needs ANTHROPIC_API_KEY."""
+    key = get_anthropic_api_key()
+    if not key:
+        raise RuntimeError("ANTHROPIC_API_KEY not configured")
+    model = _secret("ANTHROPIC_MODEL") or os.environ.get("ANTHROPIC_MODEL", "") or CLAUDE_VISION_MODEL
+    payload = {
+        "model": model,
+        "max_tokens": 3000,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64}},
+                {"type": "text", "text": prompt},
+            ],
+        }],
+    }
+    resp = _requests.post(
+        "https://api.anthropic.com/v1/messages",
+        json=payload,
+        headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+        timeout=90,
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"Claude {resp.status_code} {resp.text[:200]}")
+    blocks = resp.json().get("content", [])
+    return "".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip()
+
+
+def _build_reconcile_prompt(draft_a: str, draft_b: str, context: str = "") -> str:
+    return f"""Two readers transcribed the attached image of a NON-NATIVE student's Arabic handwriting.
+Look at the IMAGE yourself, line by line (right to left). Where the two drafts differ, choose what the handwriting
+really shows — or your own reading if both are wrong.
+
+Rules:
+  • Keep the student's own spelling and grammar mistakes — do NOT correct them.
+  • Do NOT add tashkeel (diacritics) or punctuation the student did not write.
+  • Keep each physical line on its own line.
+  • Output ONLY the final Arabic transcription — no comments, no English.
+{_ocr_context_block(context)}
+DRAFT A:
+{draft_a}
+
+DRAFT B:
+{draft_b}
+"""
+
+
+def _gemini_transcribe(enhanced_b64: str, orig_b64: str, api_keys: list, prompt: str):
+    """First pass with Gemini. Returns (text, (key, model, b64) | None, quota_errors, last_error)."""
+    quota_errors = 0
+    last_error = None
+    for api_key in api_keys:
+        models_to_try = _gemini_models_for_ocr(api_key)
+        for b64 in [enhanced_b64, orig_b64]:
+            for model_name in models_to_try:
+                try:
+                    text = _clean_ocr_output(_gemini_ocr_rest(b64, api_key, model_name, prompt))
+                    if text:
+                        return text, (api_key, model_name, b64), quota_errors, last_error
+                except Exception as e:
+                    err_str = str(e).lower()
+                    if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
+                        quota_errors += 1
+                    last_error = e
+    return None, None, quota_errors, last_error
+
+
+def _longer_enough(new: str, old: str) -> bool:
+    return bool(new) and len(new) >= 0.6 * len(old)
+
+
 def extract_arabic_from_image_gemini(uploaded_file, context: str = "") -> str:
     """
     ENHANCED OCR for Arabic handwriting — accepts all file types.
-    Two passes: (1) transcribe, (2) proofread the draft against the image.
+    Engines (chosen in the sidebar):
+      • Auto: Gemini (transcribe + proofread) → Claude → Groq as fallbacks
+      • Claude only: Claude (transcribe + proofread)
+      • Cross-check: Gemini AND Claude each read the image, then Claude reconciles the two drafts
     `context` (LO / success criteria / word bank) only helps recognise ambiguous words.
     """
     filename = uploaded_file.name.lower()
@@ -1182,7 +1293,14 @@ def extract_arabic_from_image_gemini(uploaded_file, context: str = "") -> str:
             pass
 
     # ── Image / PDF path ─────────────────────────────────────────────────────
-    file_hash = _image_hash(uploaded_file) + "-" + hashlib.md5((context or "").encode("utf-8")).hexdigest()[:8]
+    engine_label = st.session_state.get("ocr_engine", OCR_ENGINES[0])
+    engine = "claude" if engine_label.startswith("Claude") else ("both" if engine_label.startswith("Best") else "auto")
+    claude_ok = bool(get_anthropic_api_key())
+    if engine in ("claude", "both") and not claude_ok:
+        engine = "auto"   # no Claude key → quietly use Gemini
+
+    file_hash = (_image_hash(uploaded_file) + "-" + engine + "-"
+                 + hashlib.md5((context or "").encode("utf-8")).hexdigest()[:8])
     cache = _get_ocr_cache()
     if file_hash in cache:
         return cache[file_hash]
@@ -1201,71 +1319,82 @@ def extract_arabic_from_image_gemini(uploaded_file, context: str = "") -> str:
     for img in raw_images:
         enhanced_b64 = pil_image_to_base64(_preprocess_image_for_ocr(img))
         orig_b64 = pil_image_to_base64(_limit_size(img, 3000))
+        claude_b64 = pil_image_to_base64(_limit_size(img, 1800))   # API image size limit
 
-        page_text = None
-        used = None   # (api_key, model, image_b64) that worked — reused for the proofreading pass
+        gem_text, gem_used, claude_text = None, None, None
 
-        # Try every key × best-available models (cleaned image first, then original)
-        for api_key in api_keys:
-            if page_text:
-                break
-            models_to_try = _gemini_models_for_ocr(api_key)
-            for b64 in [enhanced_b64, orig_b64]:
-                if page_text:
-                    break
-                for model_name in models_to_try:
-                    try:
-                        text = _clean_ocr_output(_gemini_ocr_rest(b64, api_key, model_name, prompt))
-                        if text:
-                            page_text = text
-                            used = (api_key, model_name, b64)
-                            break
-                    except Exception as e:
-                        err_str = str(e).lower()
-                        if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
-                            quota_errors += 1
-                        last_error = e
-                        continue
+        # ── Reader 1: Gemini ──
+        if engine in ("auto", "both"):
+            gem_text, gem_used, qe, le = _gemini_transcribe(enhanced_b64, orig_b64, api_keys, prompt)
+            quota_errors += qe
+            last_error = le or last_error
 
-        if page_text and used:
-            # ── Pass 2: proofread the draft against the image ──
+        # ── Reader 2: Claude (chosen, cross-check, or fallback when Gemini failed) ──
+        if claude_ok and (engine in ("claude", "both") or not gem_text):
             try:
+                claude_text = _clean_ocr_output(_claude_ocr_rest(claude_b64, prompt))
+            except Exception as e:
+                last_error = e
+
+        # ── Combine ──
+        page_text = None
+        if gem_text and claude_text:
+            # both readers → Claude looks at the image again and settles every difference
+            try:
+                rec = _clean_ocr_output(_claude_ocr_rest(claude_b64, _build_reconcile_prompt(gem_text, claude_text, context)))
+                page_text = rec if _longer_enough(rec, claude_text) else claude_text
+            except Exception:
+                page_text = claude_text
+        elif gem_text:
+            page_text = gem_text
+            try:   # proofread pass with the same Gemini model
                 refined = _clean_ocr_output(
-                    _gemini_ocr_rest(used[2], used[0], used[1], _build_refine_prompt(page_text, context))
+                    _gemini_ocr_rest(gem_used[2], gem_used[0], gem_used[1], _build_refine_prompt(gem_text, context))
                 )
-                if refined and len(refined) >= 0.6 * len(page_text):
+                if _longer_enough(refined, gem_text):
                     page_text = refined
             except Exception:
-                pass   # keep the first-pass draft
-            all_text.append(page_text)
-        else:
-            # ── Gemini exhausted → try Groq vision as last resort ──
-            try:
-                groq_text = _clean_ocr_output(_groq_ocr_fallback(orig_b64, prompt))
-                if groq_text:
-                    all_text.append(groq_text)
-                    continue  # success — move to next page
-            except Exception as groq_err:
-                last_error = groq_err
+                pass
+        elif claude_text:
+            page_text = claude_text
+            try:   # proofread pass with Claude
+                refined = _clean_ocr_output(_claude_ocr_rest(claude_b64, _build_refine_prompt(claude_text, context)))
+                if _longer_enough(refined, claude_text):
+                    page_text = refined
+            except Exception:
+                pass
 
-            # All methods failed — give clear guidance
-            if quota_errors > 0:
-                key_count = len(api_keys)
-                extra = (
-                    " You only have 1 API key configured — add GOOGLE_API_KEY_2 (and optionally GOOGLE_API_KEY_3) "
-                    "in .streamlit/secrets.toml to automatically rotate keys when quota is hit."
-                    if key_count == 1 else
-                    f" All {key_count} configured Google API keys have hit their quota, and the Groq vision fallback also failed."
-                )
-                raise RuntimeError(
-                    f"⚠️ Google Gemini quota exceeded — the free OCR limit has been reached for today.{extra}\n\n"
-                    "💡 **Quick fix:** Switch to the '⌨️ Type / Paste Text' tab and paste the Arabic text manually, "
-                    "or try again after midnight when the quota resets."
-                )
-            raise RuntimeError(
-                f"OCR failed for this image. Last error: {last_error}\n\n"
-                "💡 Try the '⌨️ Type / Paste Text' tab to paste the Arabic text manually."
+        if page_text:
+            all_text.append(page_text)
+            continue
+
+        # ── Last resort: Groq vision ──
+        try:
+            groq_text = _clean_ocr_output(_groq_ocr_fallback(orig_b64, prompt))
+            if groq_text:
+                all_text.append(groq_text)
+                continue
+        except Exception as groq_err:
+            last_error = groq_err
+
+        # All methods failed — give clear guidance
+        if quota_errors > 0:
+            key_count = len(api_keys)
+            extra = (
+                " You only have 1 API key configured — add GOOGLE_API_KEY_2 (and optionally GOOGLE_API_KEY_3) "
+                "in .streamlit/secrets.toml to automatically rotate keys when quota is hit."
+                if key_count == 1 else
+                f" All {key_count} configured Google API keys have hit their quota, and the fallback readers also failed."
             )
+            raise RuntimeError(
+                f"⚠️ Google Gemini quota exceeded — the free OCR limit has been reached for today.{extra}\n\n"
+                "💡 **Quick fix:** Switch to the '⌨️ Type / Paste Text' tab and paste the Arabic text manually, "
+                "or add an ANTHROPIC_API_KEY to use Claude as the reader, or try again after midnight."
+            )
+        raise RuntimeError(
+            f"OCR failed for this image. Last error: {last_error}\n\n"
+            "💡 Try the '⌨️ Type / Paste Text' tab to paste the Arabic text manually."
+        )
 
     result = "\n".join(all_text)
     cache[file_hash] = result
@@ -1450,6 +1579,19 @@ with st.sidebar:
         {'<div style="font-size:10px;color:rgba(255,153,0,0.7);margin-top:2px">Add GOOGLE_API_KEY_2 to secrets.toml to auto-rotate when quota hits</div>' if n_keys == 1 else ''}
     </div>
     """, unsafe_allow_html=True)
+    st.divider()
+
+    st.markdown("### 🔎 Handwriting reader")
+    st.selectbox(
+        "OCR engine",
+        OCR_ENGINES,
+        key="ocr_engine",
+        help="Cross-check = Gemini and Claude both read the image, then Claude settles every difference (most accurate, uses more quota).",
+    )
+    if not get_anthropic_api_key():
+        st.caption("➕ Add ANTHROPIC_API_KEY to secrets.toml to enable Claude as a reader.")
+    else:
+        st.caption("✅ Claude reader available")
     st.divider()
 
 st.markdown("""
@@ -1712,7 +1854,7 @@ st.markdown("""
         direction: rtl !important;
         text-align: right !important;
         unicode-bidi: embed !important;
-        font-family: 'Amiri', 'Tajawal', 'Arial Unicode MS', Arial, sans-serif !important;
+        font-family: Calibri, Carlito, 'Segoe UI', Tahoma, 'Noto Sans Arabic', Arial, sans-serif !important;
         font-size: 1.05rem !important;
         line-height: 1.9 !important;
         letter-spacing: 0.5px !important;
@@ -1801,7 +1943,7 @@ components.html("""
             ta.style.direction      = 'rtl';
             ta.style.textAlign      = 'right';
             ta.style.unicodeBidi    = 'embed';
-            ta.style.fontFamily     = "'Amiri','Tajawal',Arial,sans-serif";
+            ta.style.fontFamily     = "Calibri,'Carlito','Segoe UI',Tahoma,'Noto Sans Arabic',Arial,sans-serif";
             ta.style.fontSize       = '1.05rem';
             ta.style.lineHeight     = '1.85';
         });
@@ -2010,7 +2152,7 @@ with col_right:
             ta.style.direction = 'rtl';
             ta.style.textAlign = 'right';
             ta.style.unicodeBidi = 'embed';
-            ta.style.fontFamily = "'Amiri','Tajawal',Arial,sans-serif";
+            ta.style.fontFamily = "Calibri,'Carlito','Segoe UI',Tahoma,'Noto Sans Arabic',Arial,sans-serif";
             ta.style.fontSize = '1.05rem';
             ta.style.lineHeight = '1.9';
         });
@@ -2027,10 +2169,17 @@ with col_right:
                     "✏️ مراجعة النص المستخرج — Review & correct (Arabic reads right-to-left ←):",
                     value=extracted_writing,
                     height=260,
-                    key="corrected_writing",
+                    key="corrected_writing_" + hashlib.md5(extracted_writing.encode("utf-8")).hexdigest()[:8],
                     placeholder="سيظهر النص العربي هنا بعد المعالجة..."
                 )
                 writing = corrected_writing if corrected_writing.strip() else extracted_writing
+                st.download_button(
+                    "⬇️ Download typed text (TXT)",
+                    data=writing.encode("utf-8-sig"),
+                    file_name="typed_writing.txt",
+                    mime="text/plain",
+                    key="dl_typed_" + hashlib.md5(writing.encode("utf-8")).hexdigest()[:8],
+                )
 
                 if corrected_writing.strip() != extracted_writing.strip():
                     st.success("✅ Using your manually corrected version")
@@ -2136,19 +2285,33 @@ if assess_btn:
                     return any('\u0600' <= ch <= '\u06FF' for ch in text)
 
                 spelling = []
+                _writing_norm = _norm_ar(writing)
+                _punct = " .,،؛:!?؟\"'()[]«»-"
                 for s in raw_spelling:
-                    w = s.get("wrong", "").strip()
-                    c = s.get("correct", "").strip()
-                    # Both sides must be Arabic, and they must differ (after ignoring hamza/taa marbuta/alef variants)
+                    # no tashkeel anywhere — the student did not write it
+                    w = _strip_tashkeel(s.get("wrong", "")).strip(_punct)
+                    c = _strip_tashkeel(s.get("correct", "")).strip(_punct)
                     if not (is_arabic(w) and is_arabic(c)):
                         continue
-                    # Skip if only hamza/alef variants differ: normalize and compare
+                    # ONE word only (no phrases / sentences)
+                    if " " in w or " " in c:
+                        continue
+                    # the "wrong" word must really be in the student's text
+                    if _norm_ar(w) not in _writing_norm:
+                        continue
+                    # ignore hamza / alef / taa-marbuta variants (not flagged)
                     def normalize_ar(t):
                         t = re.sub(r'[أإآٱ]', 'ا', t)
                         t = re.sub(r'[ةه]$', 'ه', t)
                         t = re.sub(r'[ىي]$', 'ي', t)
                         return t
                     if normalize_ar(w) == normalize_ar(c):
+                        continue
+                    # a real spelling slip = small difference; big differences are usually OCR/AI rewrites
+                    d = levenshtein_distance(_norm_ar(w), _norm_ar(c))
+                    if d == 0 or d > max(2, len(c) // 3):
+                        continue
+                    if any(x["wrong"] == w for x in spelling):
                         continue
                     spelling.append({"wrong": w, "correct": c})
                     if len(spelling) >= 5:
@@ -2168,8 +2331,8 @@ if assess_btn:
                     used_words   = [w for w in wb_words if w in writing]
                     unused_words = [w for w in wb_words if w not in writing]
                     if used_words or unused_words:
-                        used_html   = " ".join([f"<span style='background:#c8e6c9;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block;font-family:\"Amiri\",serif;direction:rtl'>{w}</span>" for w in used_words[:10]])
-                        unused_html = " ".join([f"<span style='background:#ffcdd2;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block;font-family:\"Amiri\",serif;direction:rtl'>{w}</span>" for w in unused_words[:10]])
+                        used_html   = " ".join([f"<span style='background:#c8e6c9;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block;font-family:{CALIBRI_STACK};direction:rtl'>{w}</span>" for w in used_words[:10]])
+                        unused_html = " ".join([f"<span style='background:#ffcdd2;padding:2px 6px;border-radius:4px;margin:2px;display:inline-block;font-family:{CALIBRI_STACK};direction:rtl'>{w}</span>" for w in unused_words[:10]])
                         wb_analysis = f"""
                         <div style="margin:16px 0;padding:12px;background:rgba(212,175,55,0.05);border:1px solid rgba(212,175,55,0.2);border-radius:10px">
                             <div style="font-size:13px;font-weight:700;color:#d4af37;margin-bottom:8px">📚 WORD BANK USAGE ANALYSIS</div>
@@ -2217,9 +2380,9 @@ if assess_btn:
                 if spelling:
                     spell_rows = "".join([f"""
                     <tr style="border-bottom:1px solid rgba(139,0,0,0.08)">
-                      <td style="padding:5px 10px;font-size:14px;color:#2e7d32;font-weight:700;font-family:'Amiri',serif;direction:rtl;text-align:right">{s.get('correct','')}</td>
+                      <td style="padding:5px 10px;font-size:14px;color:#2e7d32;font-weight:700;font-family:{CALIBRI_STACK};direction:rtl;text-align:right">{s.get('correct','')}</td>
                       <td style="padding:5px 6px;font-size:12px;color:#888;text-align:center">←</td>
-                      <td style="padding:5px 10px;font-size:14px;color:#c62828;font-family:'Amiri',serif;direction:rtl;text-align:right;text-decoration:line-through">{s.get('wrong','')}</td>
+                      <td style="padding:5px 10px;font-size:14px;color:#c62828;font-family:{CALIBRI_STACK};direction:rtl;text-align:right;text-decoration:line-through">{s.get('wrong','')}</td>
                     </tr>""" for s in spelling])
                     spelling_section = f"""
                     <div style="margin-top:12px">
@@ -2237,7 +2400,8 @@ if assess_btn:
 
                 # ── Full A5 HTML report ──
                 html_report = f"""
-<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Carlito:wght@400;700&display=swap" rel="stylesheet">
 <div class="print-report" style="
   width:555px;
   background:#ffffff;
@@ -2245,7 +2409,7 @@ if assess_btn:
   border-radius:10px;
   padding:18px 22px 20px;
   margin:10px auto;
-  font-family:'Tajawal',sans-serif;
+  font-family:{CALIBRI_STACK};
   font-size:11.5px;
   color:#2c1810;
   box-shadow:0 6px 20px rgba(0,0,0,0.18);
@@ -2255,14 +2419,14 @@ if assess_btn:
   <!-- ── Header ── -->
   <div style="text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #d4af37">
     <div style="font-size:9px;color:#b8941f;letter-spacing:3px;font-weight:700;margin-bottom:3px;text-transform:uppercase">Arabic Writing Assessment</div>
-    <div style="font-family:'Amiri',serif;font-size:26px;color:#2c1810;font-weight:700;margin:2px 0">{first_name}</div>
+    <div style="font-family:{CALIBRI_STACK};font-size:26px;color:#2c1810;font-weight:700;margin:2px 0">{first_name}</div>
     <div style="font-size:9px;color:#5a4000;font-weight:600;letter-spacing:1px">{(year_group.strip().upper() + " &nbsp;·&nbsp; ") if year_group.strip() else ""}{year} YEARS OF STUDYING ARABIC &nbsp;·&nbsp; {datetime.now().strftime('%d %b %Y')}</div>
   </div>
 
   <!-- ── Score Badge ── -->
   <div style="margin-bottom:14px;padding:10px 14px;background:rgba(212,175,55,0.07);border-radius:8px;border:1px solid rgba(212,175,55,0.35);display:flex;align-items:center;gap:14px">
     <div style="text-align:center;min-width:64px;border-right:2px solid rgba(212,175,55,0.25);padding-right:14px;flex-shrink:0">
-      <div style="font-size:30px;font-weight:900;color:#b8941f;line-height:1">{score.get('score','?')}<span style="font-size:13px;color:rgba(184,148,31,0.6)">/{score.get('out_of',15)}</span></div>
+      <div style="font-size:30px;font-weight:700;color:#b8941f;line-height:1">{score.get('score','?')}<span style="font-size:13px;color:rgba(184,148,31,0.6)">/{score.get('out_of',15)}</span></div>
       <div style="font-size:8px;color:#b8941f;font-weight:700;letter-spacing:1px;margin-top:2px">SCORE</div>
     </div>
     <div style="flex:1">
@@ -2306,16 +2470,16 @@ if assess_btn:
 </div>"""
 
                 # Print button HTML (lives outside .print-report so it is hidden on print)
-                print_button_html = """
+                print_button_html = f"""
 <div style="text-align:center;margin:16px 0">
   <button onclick="window.print()" style="
     background:linear-gradient(160deg,#f0d060 0%,#d4af37 35%,#b8941f 70%,#9a7a10 100%);
-    color:#0d0a02;font-family:'Tajawal',sans-serif;font-weight:900;font-size:14px;
+    color:#0d0a02;font-family:{CALIBRI_STACK};font-weight:700;font-size:14px;
     letter-spacing:2px;border:none;border-radius:12px;padding:12px 32px;cursor:pointer;
     box-shadow:0 6px 0 #5a4000,0 8px 20px rgba(0,0,0,0.4);">
     🖨️ PRINT A5 REPORT
   </button>
-  <div style="font-size:11px;color:#b8941f;margin-top:8px;font-family:'Tajawal',sans-serif">
+  <div style="font-size:11px;color:#b8941f;margin-top:8px;font-family:{CALIBRI_STACK}">
     Click to print or save as PDF &nbsp;(Ctrl+P / Cmd+P)
   </div>
 </div>"""
