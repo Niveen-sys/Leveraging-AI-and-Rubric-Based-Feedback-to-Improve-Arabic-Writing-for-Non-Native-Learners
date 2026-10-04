@@ -619,21 +619,49 @@ NEXT STEP SOURCES — use in this priority order:
      e.g. they used ذهبت once → "Add another past tense verb like لعبتُ or أكلتُ"
 
 ═══════════════════════════════════════════════════
-PART D — SPELLING (STRICT RULES)
+PART D — SPELLING + COMMON MISTAKES OF NON-NATIVE ARABIC LEARNERS
 ═══════════════════════════════════════════════════
-Flag ONLY true spelling mistakes — wrong Arabic letters in Arabic script.
-  • "wrong": the word exactly as the student wrote it (Arabic script only)
-  • "correct": the correct Arabic spelling
-  • SKIP: romanised text, English words, OCR artifacts
-  • SKIP: ة/ه confusion, ى/ي confusion, hamza variations (أ/ا/إ) — these are not flagged
-  • ONLY flag: wrong consonant used, missing essential letter, extra letter that changes meaning
-  • USE CONTEXT: predict the intended word from word bank, topic, and surrounding text
-  • MAXIMUM 5 corrections
-  • ONE WORD per correction — never a phrase or a sentence
-  • The student wrote WITHOUT tashkeel: NEVER add diacritics (fatha/damma/kasra/shadda...) to "wrong" or "correct"
-  • The text was typed from handwriting by OCR. If a word looks like an OCR misreading rather than a real
-    student spelling mistake, do NOT list it
-  • "wrong" must be a word that really appears in the STUDENT WRITING below
+You are a teacher who knows the typical mistakes of NON-ARAB learners. Read the STUDENT WRITING closely,
+use CONTEXT (topic, the whole sentence, the word bank) to work out what the student MEANT, then report the
+most useful mistakes in TWO lists.
+
+LIST 1 — "spelling": the spelling of ONE word (maximum 4)
+  • "wrong" = the word exactly as written. "correct" = the SAME word spelled correctly. One word only.
+  • Typical learner slips:
+      – extra long-vowel letters (extra madd): هاذا → هذا ، لاكن → لكن ، ذالك → ذلك ، كذالك → كذلك ، أولائك → أولئك
+      – a missing or wrong long-vowel letter; a doubled or dropped letter
+      – look-alike / sound-alike letters: ث/س/ت ، ذ/ز/د ، ض/ظ/د ، ص/س ، ط/ت ، ق/ك ، ح/ه/خ ، ع/ء
+      – ة / ه / ت at the end of a word; ى / ي; hamza (أ / إ / ا) — only when it is clearly wrong for a real word
+  • NEVER replace a word by a different word with a different meaning.
+
+LIST 2 — "learner_errors": grammar and usage (maximum 4, most important first)
+  Look especially for:
+   1. ADJECTIVE BEFORE THE NOUN (English word order): جميل بيت → بيت جميل
+   2. GENDER AGREEMENT
+        – verb with a feminine subject: أختي يتبرع → أختي تتبرع ، جدتي يساعد → جدتي تساعد ، أمي ذهب → أمي ذهبت
+        – verb with a masculine subject: أبي تعمل → أبي يعمل
+        – adjective with its noun: بنت جميل → بنت جميلة ، مدرسة كبير → مدرسة كبيرة
+        – demonstratives: هذا مدرسة → هذه مدرسة
+   3. DEFINITENESS: ال on both nouns of an idafa (الكتاب الطالب → كتاب الطالب); noun with ال but adjective without (البيت كبير used as a phrase)
+   4. NUMBER / PLURAL: a non-human plural takes a feminine SINGULAR adjective (كتب جديدة, not كتب جدد); dual and plural agreement
+   5. VERB FORM: wrong person ending; past and present mixed in one idea (أنا ذهب)
+   6. PREPOSITIONS: missing or wrong (ذهبت المدرسة → ذهبت إلى المدرسة)
+   7. "TO BE" copied from English: an extra هو / هي used as "is" (أنا هو طالب)
+   8. NEGATION: لا + past verb (لا ذهبت → لم أذهب أو ما ذهبت)
+   9. LITERAL TRANSLATION / word order that sounds un-Arabic
+  10. CONNECTIVES written wrongly (و separated from its word, لكن / لأن misspelt)
+  For each item give:
+     "original"   = the fragment (maximum 6 words) copied EXACTLY from the STUDENT WRITING
+     "type"       = 2–4 words, e.g. "Gender agreement"
+     "suggestion" = the corrected fragment (usually only the wrong word changes)
+     "hint"       = ONE short tip in English — not a lecture
+
+QUALITY RULES (very important)
+  • Report an error ONLY if you are confident (about 90%). If a word may be an OCR misreading, SKIP it.
+  • "wrong" and "original" must really appear in the STUDENT WRITING. Never invent text.
+  • The student wrote WITHOUT tashkeel: NEVER add diacritics (fatha, damma, kasra, shadda...) anywhere.
+  • SKIP romanised text, English words and OCR artifacts.
+  • Do not list the same mistake twice. Either list may be empty if there is nothing real to report.
 
 ═══════════════════════════════════════════════════
 STUDENT INFO
@@ -679,7 +707,7 @@ OUTPUT — return ONLY this JSON (no markdown, no explanation):
   "ebi": ["Even better if you...", "Even better if you..."],
   "next_steps": ["concrete specific task 1", "concrete specific task 2", "concrete specific task 3"],
   "spelling": [{{"wrong": "arabic word as written", "correct": "correct arabic word"}}],
-  "grammar": [{{"original": "sentence from writing", "issue": "what is wrong", "hint": "how to fix without giving the answer"}}],
+  "learner_errors": [{{"original": "fragment exactly as written (max 6 words)", "type": "Gender agreement", "suggestion": "corrected fragment", "hint": "one short tip"}}],
   "sc_check": [{{"criterion": "...", "met": true, "comment": "..."}}],
   "category_scores": {{"purpose_content": 2, "organization": 2, "vocabulary": 2, "sentence_structure": 2, "grammar_spelling": 2}},
   "score": {{"level": "Beginning/Developing/Accomplished/Advanced/Exemplary", "score": 0, "out_of": 15, "reason": "brief reason"}}
@@ -1171,6 +1199,80 @@ def _norm_ar(text: str) -> str:
     t = _strip_tashkeel(text)
     t = re.sub(r"[أإآٱ]", "ا", t)
     return t.replace("ى", "ي")
+
+
+# Typical misspellings of NON-NATIVE learners that are unambiguous (extra madd letters etc.)
+_LEARNER_MISSPELLINGS = {
+    "هاذا": "هذا", "هاذه": "هذه", "هاذان": "هذان", "هاذين": "هذين",
+    "لاكن": "لكن", "لاكنه": "لكنه", "لاكنها": "لكنها", "لاكني": "لكني",
+    "ذالك": "ذلك", "كذالك": "كذلك", "اولائك": "أولئك", "أولائك": "أولئك",
+    "اللذي": "الذي", "اللتي": "التي", "اللذين": "الذين", "اللذان": "اللذان",
+}
+
+# Letters learners commonly confuse (look-alike / sound-alike) – a spelling fix may only swap letters inside a group
+_CONFUSABLE_GROUPS = ["بتثني", "جحخ", "دذ", "رز", "سش", "صض", "طظ", "عغ", "فق", "هة", "اأإآء", "وؤ", "يئى",
+                      "ثست", "ذزد", "ظضذ", "قك", "حه", "طت", "صس", "ضد", "ةت"]
+_CONFUSABLE_PAIRS = set()
+for _g in _CONFUSABLE_GROUPS:
+    for _a in _g:
+        for _b in _g:
+            if _a != _b:
+                _CONFUSABLE_PAIRS.add((_a, _b))
+_WEAK_LETTERS = set("اوىيهةءأإؤئآ")
+
+
+def _plausible_learner_edit(wrong: str, correct: str) -> bool:
+    """
+    True only if `correct` can be reached from `wrong` by typical learner slips:
+    swapping look-alike/sound-alike letters, or adding/removing a weak (long-vowel) letter or a doubled letter.
+    This rejects AI 'corrections' that replace a word by a different word.
+    """
+    if wrong == correct:
+        return False
+    n, m = len(wrong), len(correct)
+    limit = 1 if min(n, m) <= 4 else (2 if min(n, m) <= 8 else 3)
+    INF = 99
+    dp = [[INF] * (m + 1) for _ in range(n + 1)]
+    dp[0][0] = 0
+    for i in range(n + 1):
+        for j in range(m + 1):
+            cur = dp[i][j]
+            if cur >= INF:
+                continue
+            if i < n and j < m:
+                a, b = wrong[i], correct[j]
+                if a == b:
+                    dp[i + 1][j + 1] = min(dp[i + 1][j + 1], cur)
+                elif (a, b) in _CONFUSABLE_PAIRS:
+                    dp[i + 1][j + 1] = min(dp[i + 1][j + 1], cur + 1)
+            if i < n:   # delete a letter from the wrong word
+                a = wrong[i]
+                if a in _WEAK_LETTERS or (i > 0 and wrong[i - 1] == a):
+                    dp[i + 1][j] = min(dp[i + 1][j], cur + 1)
+            if j < m:   # insert a letter that the student left out
+                b = correct[j]
+                if b in _WEAK_LETTERS or (j > 0 and correct[j - 1] == b):
+                    dp[i][j + 1] = min(dp[i][j + 1], cur + 1)
+    return dp[n][m] <= limit
+
+
+def _known_learner_misspellings(writing: str) -> list:
+    """Dictionary check for classic learner misspellings (also with a prefix like و / ف / ب / ل)."""
+    found = []
+    seen = set()
+    for raw in re.split(r"\s+", _strip_tashkeel(writing)):
+        tok = raw.strip(" .,،؛:!?؟\"'()[]«»-")
+        if not tok:
+            continue
+        for prefix in ("", "و", "ف", "ب", "ل", "ك"):
+            if prefix and not tok.startswith(prefix):
+                continue
+            stem = tok[len(prefix):]
+            if stem in _LEARNER_MISSPELLINGS and tok not in seen:
+                seen.add(tok)
+                found.append({"wrong": tok, "correct": prefix + _LEARNER_MISSPELLINGS[stem]})
+                break
+    return found
 
 
 def _clean_ocr_output(text: str) -> str:
@@ -2284,7 +2386,7 @@ if assess_btn:
                     """Return True if text contains any Arabic character."""
                     return any('\u0600' <= ch <= '\u06FF' for ch in text)
 
-                spelling = []
+                spelling = list(_known_learner_misspellings(writing))[:4]
                 _writing_norm = _norm_ar(writing)
                 _punct = " .,،؛:!?؟\"'()[]«»-"
                 for s in raw_spelling:
@@ -2300,16 +2402,10 @@ if assess_btn:
                     if _norm_ar(w) not in _writing_norm:
                         continue
                     # ignore hamza / alef / taa-marbuta variants (not flagged)
-                    def normalize_ar(t):
-                        t = re.sub(r'[أإآٱ]', 'ا', t)
-                        t = re.sub(r'[ةه]$', 'ه', t)
-                        t = re.sub(r'[ىي]$', 'ي', t)
-                        return t
-                    if normalize_ar(w) == normalize_ar(c):
+                    if _norm_ar(w) == _norm_ar(c):
                         continue
                     # a real spelling slip = small difference; big differences are usually OCR/AI rewrites
-                    d = levenshtein_distance(_norm_ar(w), _norm_ar(c))
-                    if d == 0 or d > max(2, len(c) // 3):
+                    if not _plausible_learner_edit(_norm_ar(w), _norm_ar(c)):
                         continue
                     if any(x["wrong"] == w for x in spelling):
                         continue
@@ -2398,6 +2494,53 @@ if assess_btn:
                       🎉 No major spelling errors detected
                     </div>"""
 
+                # ── Common learner errors (grammar / usage) — validated against the student's text ──
+                learner_errors = []
+                _writing_ws = " ".join(_norm_ar(writing).split())
+                for e in (data.get("learner_errors", []) or []):
+                    if not isinstance(e, dict):
+                        continue
+                    o = _strip_tashkeel(str(e.get("original", ""))).strip()
+                    sg = _strip_tashkeel(str(e.get("suggestion", ""))).strip()
+                    if not o or not sg or o == sg:
+                        continue
+                    if len(o.split()) > 6 or not (is_arabic(o) and is_arabic(sg)):
+                        continue
+                    if " ".join(_norm_ar(o).split()) not in _writing_ws:      # must be in the student's text
+                        continue
+                    if any(x["original"] == o for x in learner_errors):
+                        continue
+                    learner_errors.append({
+                        "original": o,
+                        "suggestion": sg,
+                        "type": str(e.get("type", "")).strip()[:40],
+                        "hint": str(e.get("hint", "")).strip()[:160],
+                    })
+                    if len(learner_errors) >= 4:
+                        break
+
+                if learner_errors:
+                    le_rows = "".join([f"""
+                    <tr style="border-bottom:1px solid rgba(21,101,192,0.15)">
+                      <td style="padding:6px 8px;font-size:13px;direction:rtl;text-align:right;font-family:{CALIBRI_STACK};white-space:nowrap">
+                        <span style="color:#c62828;text-decoration:line-through">{x['original']}</span>
+                        <span style="color:#888;margin:0 5px">←</span>
+                        <span style="color:#2e7d32;font-weight:700">{x['suggestion']}</span>
+                      </td>
+                      <td style="padding:6px 8px;font-size:10px;color:#1a237e;line-height:1.4;text-align:left;font-family:{CALIBRI_STACK}">
+                        <b>{x['type']}</b><br>{x['hint']}
+                      </td>
+                    </tr>""" for x in learner_errors])
+                    learner_section = f"""
+                    <div style="margin-top:12px">
+                      <div style="font-size:10px;color:#1565c0;font-weight:700;letter-spacing:1px;margin-bottom:5px;border-bottom:2px solid rgba(21,101,192,0.25);padding-bottom:3px">COMMON LEARNER MISTAKES</div>
+                      <table style="width:100%;border-collapse:collapse;background:#e3f2fd;border-radius:6px;overflow:hidden">
+                        <tbody>{le_rows}</tbody>
+                      </table>
+                    </div>"""
+                else:
+                    learner_section = ""
+
                 # ── Full A5 HTML report ──
                 html_report = f"""
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;700&display=swap" rel="stylesheet">
@@ -2462,6 +2605,8 @@ if assess_btn:
   <!-- ── SPELLING ── -->
   {spelling_section}
 
+  {learner_section}
+
   <!-- ── Footer ── -->
   <div style="margin-top:14px;padding:8px 12px;background:rgba(212,175,55,0.05);border-radius:6px;border:1px solid rgba(212,175,55,0.2);text-align:center">
     <div style="font-size:9px;color:#5a4000;line-height:1.5">Keep up the great work! Focus on the targets above for your next writing task. 💫</div>
@@ -2488,7 +2633,7 @@ if assess_btn:
                 if wb_analysis:
                     st.markdown(wb_analysis, unsafe_allow_html=True)
 
-                components.html(html_report + print_button_html, height=1020, scrolling=True)
+                components.html(html_report + print_button_html, height=1250, scrolling=True)
 
                 # ── TXT download ──
                 txt_lines = [
@@ -2515,6 +2660,10 @@ if assess_btn:
                     txt_lines.append("\n✏️ KEY SPELLING CORRECTIONS:")
                     for s in spelling:
                         txt_lines.append(f"  {s.get('wrong','')} ← {s.get('correct','')}")
+                if learner_errors:
+                    txt_lines.append("\n📘 COMMON LEARNER MISTAKES:")
+                    for x in learner_errors:
+                        txt_lines.append(f"  {x['original']} ← {x['suggestion']}   [{x['type']}] {x['hint']}")
                 txt_lines += ["\n" + "=" * 60, "Keep up the great work!", "=" * 60]
 
             else:
