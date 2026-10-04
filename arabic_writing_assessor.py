@@ -409,6 +409,89 @@ def _get_next_step_examples(year: int) -> str:
   ✓ "Use one idiomatic Arabic expression or proverb to strengthen your argument" """
 
 
+def analyze_writing(writing: str) -> str:
+    """
+    Heuristic fact-sheet about the student's writing (tenses, connectives, etc.).
+    It is given to the AI so that next steps target what is REALLY missing.
+    These are hints, not proof: the AI is told to verify them against the text.
+    """
+    import re
+
+    def n(t):  # normalise alef/yaa so matching is forgiving
+        return re.sub(r'[أإآٱ]', 'ا', t).replace('ى', 'ي')
+
+    text = re.sub(r'[\u064B-\u065F\u0670\u0640]', '', writing)  # strip tashkeel + tatweel
+    raw_tokens = [t.strip('.,،؛:!?؟"()[]«»-') for t in text.split()]
+    raw_tokens = [t for t in raw_tokens if t]
+    tokens = [n(t) for t in raw_tokens]
+    joined = " " + " ".join(tokens) + " "
+
+    lines = [l for l in text.split('\n') if l.strip()]
+    sentences = [s for s in re.split(r'[.!?؟\n]+', text) if len(s.split()) >= 2]
+
+    def find_words(vocab):
+        seen = []
+        for raw, tok in zip(raw_tokens, tokens):
+            if tok in vocab and raw not in seen:
+                seen.append(raw)
+        return seen
+
+    def find_phrases(phrases):
+        return [p for p in phrases if f" {n(p)} " in joined]
+
+    def fmt(label, found):
+        if found:
+            return f"- {label}: FOUND ({', '.join(found[:5])})"
+        return f"- {label}: NONE detected"
+
+    # Possible past-tense verbs: ends in ت / وا, not a plural noun (ات), not ال-noun, not a common noun
+    not_verbs = {"بيت", "وقت", "صوت", "بنت", "اخت", "سبت", "ست", "زيت", "موت", "حوت", "انت", "كتت", "ملعت"}
+    past = []
+    for raw, tok in zip(raw_tokens, tokens):
+        if len(tok) >= 4 and not tok.startswith("ال") and not tok.endswith("ات") \
+                and tok not in not_verbs and (tok.endswith("ت") or tok.endswith("وا")):
+            if raw not in past:
+                past.append(raw)
+    past += [w for w in find_words({"كان", "كانت", "كنت"}) if w not in past]
+
+    past_time = find_words({"امس", "الماضي", "الماضيه", "الماضية"})
+    future = find_words({"سوف"}) + [w for w in raw_tokens if w.startswith("سأ") and len(w) > 3][:2]
+    connectives = find_words({"لان", "ولكن", "لكن", "ايضا", "ثم", "لذلك", "عندما", "بينما", "كذلك", "او", "حيث", "اذا", "لو", "وايضا"}) \
+        + find_phrases(["بعد ذلك", "في النهاية", "بالاضافة الي ذلك", "من ناحية اخري"])
+    # "لأن" with attached pronoun (لأنها، لأنه، ولأن...)
+    for raw, tok in zip(raw_tokens, tokens):
+        if (tok.startswith("لان") or tok.startswith("ولان")) and len(tok) <= 7 and raw not in connectives:
+            connectives.append(raw)
+    bare_waw = sum(1 for t in tokens if t == "و")
+    if bare_waw:
+        connectives.append(f"و ×{bare_waw}")
+    time_phrases = find_words({"اليوم", "غدا", "دائما", "احيانا", "صباحا", "مساء", "عادة", "الان"}) \
+        + find_phrases(["كل يوم", "في الصباح", "في المساء", "في الظهر", "الاسبوع الماضي", "في العطلة", "بعد المدرسة", "كل صباح"])
+    negation = find_words({"لا", "لم", "لن", "ليس", "ليست", "لست"})
+    opinion = find_words({"اعتقد", "اظن", "افضل", "احب", "احبه", "احبها", "يعجبني", "تعجبني"}) \
+        + find_phrases(["في رايي", "من وجهة نظري"])
+    other_subjects = find_words({"هو", "هي", "نحن", "هم", "هن"})
+    preps = find_words({"في", "علي", "من", "الي", "مع", "عند", "عن", "بين"})
+    questions = find_words({"هل", "ماذا", "لماذا", "كيف", "اين", "متي"})
+    if "؟" in text and not questions:
+        questions = ["؟"]
+
+    out = [
+        f"- Words: {len(tokens)} | Lines: {len(lines)} | Sentences: {len(sentences)}",
+        fmt("Past tense verbs (possible)", past),
+        fmt("Past-time words", past_time),
+        fmt("Future tense (سوف / سأ...)", future),
+        fmt("Connectives", connectives),
+        fmt("Time phrases", time_phrases),
+        fmt("Negation (لا / لم / ليس)", negation),
+        fmt("Opinion / likes (أحب / أعتقد / في رأيي)", opinion),
+        fmt("Subjects other than أنا (هو / هي / نحن / هم)", other_subjects),
+        fmt("Prepositions", preps),
+        fmt("Question forms", questions),
+    ]
+    return "\n".join(out)
+
+
 def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_key: str, rubric: str, word_bank: str = '') -> str:
     first_name = name.strip().split()[0] if name.strip() else name
     level_note = get_level_note(year)
@@ -419,6 +502,7 @@ def build_prompt(name: str, year: int, lo: str, sc: str, writing: str, rubric_ke
 
     # Build year-specific next step instruction bank
     next_step_examples = _get_next_step_examples(year)
+    analysis = analyze_writing(writing)
 
     return f"""
 You are an experienced Arabic teacher marking a student's handwritten work.
@@ -446,6 +530,15 @@ CHECKLIST — tick off what the student HAS already done:
 □ Used question forms
 
 ONLY suggest things the student has NOT ticked off above.
+
+AUTO-ANALYSIS OF THE WRITING (computer-detected hints — VERIFY each one against the actual text):
+{analysis}
+
+HOW TO USE THE AUTO-ANALYSIS:
+  • "NONE detected" = probably missing. Re-read the text to confirm. If it is truly missing and appropriate for Year {year}, it is a TOP-PRIORITY next step (e.g. no past tense → "Add at least one sentence in the past tense, e.g. ذهبتُ إلى...").
+  • "FOUND" = the student already did it. NEVER ask for it in EBI or next steps — praise it in WWW instead.
+  • Detection is imperfect (OCR, handwriting, diacritics). If the text clearly shows the feature, trust the text over the analysis.
+  • Do NOT judge by word count alone. Judge by what the student achieved.
 
 ═══════════════════════════════════════════════════
 PART B — GENERATE FEEDBACK
@@ -489,6 +582,13 @@ BAD examples (too vague — NEVER write these):
   ✗ "Use different tenses"
   ✗ "Add more detail"
 
+ACCURACY RULE FOR NEXT STEPS:
+  • Look at the AUTO-ANALYSIS above. Any feature marked NONE (and confirmed missing in the text)
+    that the rubric/success criteria expect at Year {year} should become a next step FIRST.
+  • Each next step = ONE small, doable task, e.g. "Add at least one sentence in the past tense,
+    e.g. ذهبتُ إلى...".
+  • Never ask for something the student already did.
+
 NEXT STEP SOURCES — use in this priority order:
   1. UNMET SUCCESS CRITERIA → turn each unmet SC into a specific task
      e.g. SC says "use past tense" → "Write one sentence using past tense, e.g. ذهبتُ إلى..."
@@ -527,9 +627,27 @@ STUDENT WRITING:
 ═══════════════════════════════════════════════════
 SCORING
 ═══════════════════════════════════════════════════
-Score: 5 categories × 3 points each = 15 total
+Score each of the 5 rubric categories separately (Purpose/Content, Organization/Coherency,
+Vocabulary, Sentence Structure, Grammar/Spelling) using:
   Beginning=1 | Developing=1.5 | Accomplished=2 | Advanced=2.5 | Exemplary=3
-Calibration: a Year {year} student writing coherent on-topic sentences = minimum Accomplished (8-9/15)
+
+BE FAIR AND ENCOURAGING — follow these rules:
+  1. BEST FIT, not "all or nothing": choose the descriptor that BEST matches the writing overall.
+     The student does NOT need to meet every point in a descriptor. If the writing sits between
+     two levels, choose the HIGHER one.
+  2. Judge QUALITY and ACHIEVEMENT, not just quantity. Do not downgrade because of line counts
+     or word counts: handwriting size varies. A clear, well-built short text can score highly.
+  3. Give credit for effort and what the student did well in each category. One missing feature
+     (e.g. no past tense) lowers ONLY the category it belongs to, not the whole score.
+  4. Do NOT penalise OCR mistakes, handwriting, or the spelling variations listed as "SKIP" in Part D.
+     Only clear spelling errors that change the meaning count in Grammar/Spelling.
+  5. Calibration for a Year {year} student:
+       • Coherent, on-topic writing that answers the task = at least Accomplished in every
+         category (minimum 10/15).
+       • Good writing with several of the rubric features present = 11–13 / 15.
+       • Strong writing that nearly meets the top descriptors = 13.5–15 / 15.
+       • Below 8/15 ONLY for very short, off-topic, or mostly unreadable writing.
+  6. The "reason" must name the strongest category and the one category that most needs work.
 
 OUTPUT — return ONLY this JSON (no markdown, no explanation):
 {{
@@ -539,6 +657,7 @@ OUTPUT — return ONLY this JSON (no markdown, no explanation):
   "spelling": [{{"wrong": "arabic word as written", "correct": "correct arabic word"}}],
   "grammar": [{{"original": "sentence from writing", "issue": "what is wrong", "hint": "how to fix without giving the answer"}}],
   "sc_check": [{{"criterion": "...", "met": true, "comment": "..."}}],
+  "category_scores": {{"purpose_content": 2, "organization": 2, "vocabulary": 2, "sentence_structure": 2, "grammar_spelling": 2}},
   "score": {{"level": "Beginning/Developing/Accomplished/Advanced/Exemplary", "score": 0, "out_of": 15, "reason": "brief reason"}}
 }}
 """
@@ -1108,7 +1227,7 @@ def assess_with_gemini(prompt: str) -> str:
                 model=model_name,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=6000,   # reasoning models spend part of this on thinking
-                temperature=0.4,
+                temperature=0.3,
             )
             if model_name.startswith("openai/gpt-oss"):
                 kwargs["reasoning_effort"] = "low"
@@ -1822,7 +1941,32 @@ if assess_btn:
                 ebi       = data.get("ebi", [])
                 next_steps= data.get("next_steps", [])
                 sc_check  = data.get("sc_check", [])
-                score     = data.get("score", {})
+                score     = data.get("score", {}) or {}
+
+                # ── Compute the total in Python from the 5 category scores (no AI arithmetic errors) ──
+                cat = data.get("category_scores", {}) or {}
+                cat_values = []
+                for v in cat.values():
+                    try:
+                        cat_values.append(min(3.0, max(1.0, float(v))))
+                    except (TypeError, ValueError):
+                        continue
+                if len(cat_values) == 5:
+                    total = round(sum(cat_values) * 2) / 2   # nearest 0.5
+                    avg = total / 5
+                    if avg >= 2.75:
+                        lvl_calc = "Exemplary"
+                    elif avg >= 2.25:
+                        lvl_calc = "Advanced"
+                    elif avg >= 1.75:
+                        lvl_calc = "Accomplished"
+                    elif avg >= 1.25:
+                        lvl_calc = "Developing"
+                    else:
+                        lvl_calc = "Beginning"
+                    score["score"] = int(total) if total == int(total) else total
+                    score["out_of"] = 15
+                    score["level"] = lvl_calc
 
                 # ── Filter spelling: keep only Arabic→Arabic entries ──
                 raw_spelling = data.get("spelling", [])
